@@ -625,3 +625,184 @@ button:focus-visible { outline: 2px solid var(--ink); outline-offset: 4px; }
 /* Keep the gallery frame visible while clipping only the moving rail. */
 .hero-media-slot { overflow: visible; }
 .gallery-track { overflow: hidden; }
+
+/* Gallery visual refinement: corner-only frame and fixed pagination ornament */
+.hero-media-slot::before,
+.hero-media-slot::after {
+  display: none;
+  content: none;
+}
+.gallery-stage {
+  position: relative;
+  width: 100%;
+}
+.gallery-stage .hero-media-slot {
+  position: relative;
+  z-index: 1;
+  min-height: 280px;
+}
+.gallery-corner {
+  position: absolute;
+  z-index: 4;
+  width: 58px;
+  height: 58px;
+  border-color: var(--ink);
+  border-style: solid;
+  border-width: 0;
+  pointer-events: none;
+}
+.gallery-corner-tl {
+  top: -9px;
+  left: -9px;
+  border-top-width: 3px;
+  border-left-width: 3px;
+  border-radius: 34px 0 0 0;
+}
+.gallery-corner-tr {
+  top: -9px;
+  right: -9px;
+  border-top-width: 3px;
+  border-right-width: 3px;
+  border-radius: 0 34px 0 0;
+}
+.gallery-corner-bl {
+  bottom: -9px;
+  left: -9px;
+  border-bottom-width: 3px;
+  border-left-width: 3px;
+  border-radius: 0 0 0 34px;
+}
+.gallery-corner-br {
+  right: -9px;
+  bottom: -9px;
+  border-right-width: 3px;
+  border-bottom-width: 3px;
+  border-radius: 0 0 34px 0;
+}
+.hero-frame .gallery-title-decoration {
+  position: relative;
+  z-index: 2;
+  margin: 4px 0 0;
+  font-size: clamp(3.25rem, 7vw, 6.3rem);
+  line-height: .84;
+  letter-spacing: .01em;
+}
+.gallery-pagination-ornament {
+  position: absolute;
+  z-index: 5;
+  left: 50%;
+  bottom: -38px;
+  width: 218px;
+  height: 86px;
+  transform: translateX(-50%);
+  pointer-events: none;
+}
+.gallery-pagination-oval {
+  position: absolute;
+  left: 50%;
+  bottom: 13px;
+  width: 154px;
+  height: 44px;
+  border-radius: 50%;
+  background: var(--ink);
+  transform: translateX(-50%);
+}
+.gallery-pagination-dots {
+  position: absolute;
+  z-index: 1;
+  left: 50%;
+  bottom: 34px;
+  display: flex;
+  gap: 8px;
+  transform: translateX(-50%);
+}
+.gallery-pagination-dots i {
+  display: block;
+  width: 10px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--cream);
+}
+.gallery-hand-phone {
+  position: absolute;
+  z-index: 3;
+  left: 50%;
+  bottom: 27px;
+  width: 48px;
+  height: 58px;
+  transform: translateX(-50%);
+}
+.gallery-hand-shape {
+  position: absolute;
+  left: 11px;
+  bottom: 0;
+  width: 27px;
+  height: 35px;
+  border: 2px solid var(--ink);
+  border-radius: 52% 52% 36% 36%;
+  background: #fff;
+  transform: rotate(-7deg);
+}
+.gallery-hand-shape::before {
+  content: '';
+  position: absolute;
+  left: -8px;
+  bottom: 7px;
+  width: 14px;
+  height: 21px;
+  border: 2px solid var(--ink);
+  border-right: 0;
+  border-radius: 75% 0 0 50%;
+  background: #fff;
+  transform: rotate(-24deg);
+}
+.gallery-hand-shape::after {
+  content: '';
+  position: absolute;
+  top: -7px;
+  left: 5px;
+  width: 14px;
+  height: 10px;
+  border-top: 2px solid var(--ink);
+  border-radius: 50%;
+  transform: rotate(-12deg);
+}
+.gallery-phone-shape {
+  position: absolute;
+  z-index: 2;
+  top: -3px;
+  left: 20px;
+  width: 14px;
+  height: 26px;
+  border: 2px solid var(--ink);
+  border-radius: 3px;
+  background: #dce8e8;
+  transform: rotate(-7deg);
+}
+.gallery-phone-shape::before {
+  content: '';
+  position: absolute;
+  top: 3px;
+  left: 2px;
+  width: 6px;
+  height: 12px;
+  background: #9ac7cb;
+}
+.gallery-phone-shape i {
+  position: absolute;
+  bottom: 3px;
+  left: 4px;
+  width: 3px;
+  height: 3px;
+  border-radius: 50%;
+  background: var(--ink);
+}
+@media (max-width: 620px) {
+  .gallery-corner { width: 42px; height: 42px; }
+  .gallery-corner-tl { top: -7px; left: -7px; border-radius: 26px 0 0 0; }
+  .gallery-corner-tr { top: -7px; right: -7px; border-radius: 0 26px 0 0; }
+  .gallery-corner-bl { bottom: -7px; left: -7px; border-radius: 0 0 0 26px; }
+  .gallery-corner-br { right: -7px; bottom: -7px; border-radius: 0 0 26px 0; }
+  .hero-frame .gallery-title-decoration { font-size: clamp(2.8rem, 14vw, 5rem); }
+  .gallery-pagination-ornament { bottom: -34px; transform: translateX(-50%) scale(.82); transform-origin: center bottom; }
+}
