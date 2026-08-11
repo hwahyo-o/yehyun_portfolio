@@ -28,4 +28,6 @@ jobs:
           test ! -e src/main.jsx
           test ! -e src/projects.js
           test ! -e src/styles.css
+          node --check app.js
+          node --check projects.js
           ! grep -R "from 'react'\|from 'react-dom'\|@vitejs/plugin-react" --exclude-dir=.git .
