@@ -17,120 +17,168 @@
             <img src="./public/yehyun_logo.png" alt="YeHyun">
           </button>
           <nav aria-label="Portfolio categories">
-            <button data-route="category/UX%2FUI">UX/UI</button>
-            <button data-route="category/Graphic">Graphic</button>
-            <button data-route="category/Video">Video</button>
+            <button data-route="category/UX%2FUI">UX/UI <span aria-hidden="true">↓</span></button>
+            <button data-route="category/Graphic">Graphic <span aria-hidden="true">↓</span></button>
+            <button data-route="category/Video">Video <span aria-hidden="true">↓</span></button>
           </nav>
         </header>
 
         <main class="page page-content" id="home-page" data-page="home">
-          <section class="about-section" id="about">
-            <p class="section-label">About Me</p>
-            <div class="about-heading-row">
-              <button
-                class="name-display"
-                id="name-display"
-                aria-label="Yang Ye Hyun, move the pointer or focus to shuffle the font"
-              >Yang Ye Hyun</button>
-              <dl class="contact-list">
-                <div><dt>Mail</dt><dd>ajas03974@gmail.com</dd></div>
-                <div><dt>Phone</dt><dd>010-6797-0462</dd></div>
-              </dl>
-              <div class="tool-strip" aria-label="Tools">
-                <span class="tool-chip">Ps</span>
-                <span class="tool-chip">Pr</span>
-                <span class="tool-chip">Ae</span>
-                <span class="tool-chip">Ai</span>
-                <span class="tool-chip">Xd</span>
-                <span class="tool-chip">VS</span>
-                <span class="tool-chip">HTML</span>
-                <span class="tool-chip">CSS</span>
-                <span class="tool-chip">JS</span>
-                <span class="tool-chip">Figma</span>
+          <section class="gallery-hero" aria-labelledby="gallery-title">
+            <div class="hero-side hero-side-left" aria-hidden="true"></div>
+            <div class="hero-frame">
+              <p class="hero-kicker">-YEHYUN COLLECTION-</p>
+              <div class="hero-media-slot" data-media-slot="gallery-cover">
+                <span>추후 대표 이미지를 연결할 수 있는 영역입니다.</span>
               </div>
+              <h1 id="gallery-title">GALLERY</h1>
             </div>
-            <div class="about-divider"></div>
-            <div class="resume-grid">
-              <div>
-                <p><strong>2015년 입학</strong> 영주 선영여자고등학교 / 미술중점반(디자인)</p>
-                <p class="resume-subline">2015년 교내 미술 전시 팜플렛 제작활동</p>
-                <p><strong>2018년 졸업</strong> 영주선영여자고등학교 졸업 / 미술중점반(디자인)</p>
-              </div>
-              <div>
-                <p><strong>GTQ - 포토샵 1급</strong> 2024년 5월 / 한국생산성본부</p>
-                <p><strong>GTQ - 일러스트 1급</strong> 2024년 5월 / 한국생산성본부</p>
-                <p><strong>웹디자인기능사</strong> 2024년 9월 / 한국산업인력공단</p>
-                <p><strong>컴퓨터그래픽스운용기능사</strong> 2024년 9월 / 한국산업인력공단</p>
+            <div class="hero-side hero-side-right" aria-hidden="true"></div>
+          </section>
+
+          <section class="work-section ux-section" id="works" aria-labelledby="uxui-title">
+            <div class="section-heading">
+              <h2 id="uxui-title">UX/UI</h2>
+              <button class="view-more" data-route="category/UX%2FUI">View More <span aria-hidden="true">→</span></button>
+            </div>
+            <div class="work-rail work-rail-featured">
+              <article class="featured-work-card">
+                <div class="project-slot project-slot-large" data-media-slot="uxui-featured">
+                  <span>UX/UI 작업물</span>
+                  <small>이미지·영상 자산 제공 후 연결됩니다.</small>
+                </div>
+                <div class="featured-copy">
+                  <strong>Selected UX/UI project</strong>
+                  <p>프로젝트 제목과 간단한 설명이 들어갈 자리입니다.</p>
+                </div>
+              </article>
+              <div class="rail-side-slots" aria-label="UX/UI additional project slots">
+                <article class="project-card compact-card">
+                  <div class="project-slot project-slot-small" data-media-slot="uxui-02"><span>Project 02</span></div>
+                  <h3>작업물 제목</h3>
+                </article>
+                <article class="project-card compact-card">
+                  <div class="project-slot project-slot-small" data-media-slot="uxui-03"><span>Project 03</span></div>
+                  <h3>작업물 제목</h3>
+                </article>
               </div>
             </div>
           </section>
 
-          <section class="work-section" id="works">
-            <p class="work-intro">Selected works, in reverse chronological order.</p>
-            <div class="carousel-list">
-              <section class="carousel-section" aria-labelledby="carousel-uxui">
-                <div class="carousel-heading">
-                  <h2 id="carousel-uxui">UX/UI</h2>
-                  <div class="carousel-controls">
-                    <button disabled aria-label="UX/UI previous project">←</button>
-                    <button disabled aria-label="UX/UI next project">→</button>
-                  </div>
-                </div>
-                <div class="empty-project" role="status">
-                  작업물 자산을 준비 중입니다.
-                  <span>프로젝트 정보와 미디어가 추가되면 최신순으로 표시됩니다.</span>
-                </div>
-              </section>
-              <section class="carousel-section" aria-labelledby="carousel-graphic">
-                <div class="carousel-heading">
-                  <h2 id="carousel-graphic">Graphic</h2>
-                  <div class="carousel-controls">
-                    <button disabled aria-label="Graphic previous project">←</button>
-                    <button disabled aria-label="Graphic next project">→</button>
-                  </div>
-                </div>
-                <div class="empty-project" role="status">
-                  작업물 자산을 준비 중입니다.
-                  <span>프로젝트 정보와 미디어가 추가되면 최신순으로 표시됩니다.</span>
-                </div>
-              </section>
-              <section class="carousel-section" aria-labelledby="carousel-video">
-                <div class="carousel-heading">
-                  <h2 id="carousel-video">Video</h2>
-                  <div class="carousel-controls">
-                    <button disabled aria-label="Video previous project">←</button>
-                    <button disabled aria-label="Video next project">→</button>
-                  </div>
-                </div>
-                <div class="empty-project" role="status">
-                  작업물 자산을 준비 중입니다.
-                  <span>프로젝트 정보와 미디어가 추가되면 최신순으로 표시됩니다.</span>
-                </div>
-              </section>
+          <section class="film-section" aria-labelledby="film-title">
+            <div class="section-heading film-heading">
+              <h2 id="film-title">Film</h2>
+              <button class="view-more view-more-light" data-route="category/Video">View More <span aria-hidden="true">→</span></button>
+            </div>
+            <div class="work-rail film-rail">
+              <article class="film-card">
+                <div class="project-slot project-slot-film" data-media-slot="video-01"><span>Video 01</span></div>
+                <h3>영상 작업물 제목</h3>
+                <p>제작 기간과 간단한 설명이 표시됩니다.</p>
+              </article>
+              <article class="film-card">
+                <div class="project-slot project-slot-film" data-media-slot="video-02"><span>Video 02</span></div>
+                <h3>영상 작업물 제목</h3>
+                <p>제작 기간과 간단한 설명이 표시됩니다.</p>
+              </article>
+              <article class="film-card">
+                <div class="project-slot project-slot-film" data-media-slot="video-03"><span>Video 03</span></div>
+                <h3>영상 작업물 제목</h3>
+                <p>제작 기간과 간단한 설명이 표시됩니다.</p>
+              </article>
+              <article class="film-card">
+                <div class="project-slot project-slot-film" data-media-slot="video-04"><span>Video 04</span></div>
+                <h3>영상 작업물 제목</h3>
+                <p>제작 기간과 간단한 설명이 표시됩니다.</p>
+              </article>
             </div>
           </section>
-          <button class="top-button" data-action="top">Back to top ↑</button>
+
+          <section class="about-section" id="about" aria-labelledby="about-title">
+            <div class="about-intro">
+              <p class="section-label" id="about-title">About</p>
+              <p class="about-caption">My Skill &amp; Me</p>
+              <div class="skill-list" aria-label="Skills">
+                <div class="skill-row"><span>사용할 수 있는 툴</span><b>Ps</b></div>
+                <div class="skill-row"><span>LOREMLOREM<br>LOREMLOREM</span><b>Pr</b></div>
+                <div class="skill-row"><span>LOREMLOREM<br>LOREMLOREM</span><b>Ae</b></div>
+                <div class="skill-row"><span>LOREMLOREM<br>LOREMLOREM</span><b>Ai</b></div>
+                <div class="skill-row"><span>LOREMLOREM<br>LOREMLOREM</span><b>Xd</b></div>
+                <div class="skill-row"><span>LOREMLOREM<br>LOREMLOREM</span><b>VS</b></div>
+              </div>
+            </div>
+
+            <div class="resume-panel">
+              <button class="name-display" id="name-display" aria-label="Yang Ye Hyun, move the pointer or focus to shuffle the font">Yang Ye Hyun</button>
+              <div class="resume-contact">
+                <span>Mail</span><strong>ajas03974@gmail.com</strong>
+                <span>Phone</span><strong>010-6797-0462</strong>
+              </div>
+              <div class="resume-details">
+                <div>
+                  <p><strong>2015년 입학</strong> 영주 선영여자고등학교 / 미술중점반(디자인)</p>
+                  <p class="resume-subline">2015년 교내 미술 전시 팜플렛 제작활동</p>
+                  <p><strong>2018년 졸업</strong> 영주선영여자고등학교 졸업 / 미술중점반(디자인)</p>
+                </div>
+                <div>
+                  <p><strong>GTQ - 포토샵 1급</strong> 2024년 5월 / 한국생산성본부</p>
+                  <p><strong>GTQ - 일러스트 1급</strong> 2024년 5월 / 한국생산성본부</p>
+                  <p><strong>웹디자인기능사</strong> 2024년 9월 / 한국산업인력공단</p>
+                  <p><strong>컴퓨터그래픽스운용기능사</strong> 2024년 9월 / 한국산업인력공단</p>
+                </div>
+              </div>
+              <div class="project-file">
+                <strong>Project File</strong>
+                <div class="file-rail">
+                  <span class="file-slot" data-media-slot="file-01"></span>
+                  <span class="file-slot" data-media-slot="file-02"></span>
+                  <span class="file-slot" data-media-slot="file-03"></span>
+                  <span class="file-slot" data-media-slot="file-04"></span>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <button class="top-button" data-action="top">TOP <span aria-hidden="true">↑</span></button>
         </main>
 
         <main class="page page-content category-page" id="category-page" data-page="category" hidden>
-          <div class="category-nav">
-            <button disabled>← Previous</button>
+          <section class="category-hero">
+            <div class="category-side-slot project-slot" data-media-slot="category-previous"><span>Previous</span></div>
             <div class="category-title">
               <p id="category-name">UX/UI</p>
-              <h1>Projects</h1>
-              <span>작업물 준비 중</span>
+              <h1>Selected Work</h1>
+              <span>최신 작업물부터 표시됩니다.</span>
             </div>
-            <button disabled>Next →</button>
-          </div>
-          <div class="detail-empty">
-            <h2>작업물 상세 페이지를 준비 중입니다.</h2>
-            <p>프로젝트 정보와 이미지·영상 자산을 제공하면 이 화면에 연결됩니다.</p>
-          </div>
+            <div class="category-side-slot project-slot" data-media-slot="category-next"><span>Next</span></div>
+          </section>
+          <section class="detail-layout" aria-labelledby="category-detail-title">
+            <div class="detail-media project-slot project-slot-detail" data-media-slot="project-detail">
+              <span>작업물 이미지·영상이 들어갈 영역입니다.</span>
+            </div>
+            <div class="detail-copy">
+              <p class="detail-index">01 / LATEST PROJECT</p>
+              <h2 id="category-detail-title">작업물 상세 페이지</h2>
+              <p>프로젝트 제목, 제작 기간, 역할과 상세 설명을 자산 제공 후 연결할 수 있습니다.</p>
+              <dl>
+                <div><dt>Period</dt><dd>추후 입력</dd></div>
+                <div><dt>Role</dt><dd>추후 입력</dd></div>
+              </dl>
+            </div>
+          </section>
           <div class="bottom-project-nav">
             <button disabled>← Previous project</button>
             <button disabled>Next project →</button>
           </div>
+          <button class="top-button" data-action="top">TOP <span aria-hidden="true">↑</span></button>
         </main>
+
+        <footer class="site-footer" aria-hidden="true">
+          <div class="footer-shape footer-shape-blue"></div>
+          <div class="footer-shape footer-shape-yellow"></div>
+          <div class="footer-shape footer-shape-pink"></div>
+          <div class="footer-shape footer-shape-cyan"></div>
+        </footer>
       </div>
 
       <div class="loading-layer" id="loading-layer" aria-label="Portfolio loading">
