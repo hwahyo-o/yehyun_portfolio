@@ -61,7 +61,8 @@ button:focus-visible { outline: 2px solid #111; outline-offset: 4px; }
 .site-shell.is-ready { animation: page-in .55s ease-out forwards; }
 @keyframes page-in { from { opacity: 0; } to { opacity: 1; } }
 .gnb { position: sticky; top: 0; z-index: 10; display: flex; justify-content: space-between; align-items: center; min-height: 74px; padding: 0 clamp(20px, 4vw, 64px); background: #ddd; }
-.logo-button { font-size: clamp(1.2rem, 2vw, 1.8rem); font-weight: 800; letter-spacing: -.06em; }
+.logo-button { display: inline-flex; align-items: center; padding: 0; }
+.logo-button img { display: block; width: clamp(88px, 9vw, 128px); height: auto; }
 .gnb nav { display: flex; gap: clamp(18px, 3vw, 50px); }
 .gnb nav button { font-size: clamp(.85rem, 1.2vw, 1.15rem); }
 .page-content { padding: clamp(56px, 8vw, 120px) clamp(20px, 4vw, 64px) 80px; }
