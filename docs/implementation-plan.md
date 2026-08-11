@@ -231,3 +231,59 @@ Gate가 실패하면 실패한 계층만 원인 방향으로 수정한다.
 - Gallery hero를 800ms 간격의 우→좌 자동 순환 슬라이드로 확장한다.
 - 카테고리 상세를 중앙 제목·제작 기간, 좌우 소형 썸네일, 본문 상세, 하단 이전/다음 버튼 형식으로 정리한다.
 - 실제 작업물 데이터가 없으므로 최신 작업물 슬롯을 첫 상태로 유지하고 이전/다음 썸네일은 비활성 슬롯으로 표시한다.
+
+
+### 2026-08-11 Gallery banner visual refinement
+
+#### 문제별 수정 계획
+
+1. 중앙 배너의 전체 외곽선을 제거하고 네 모서리의 꺾인 라인 오브젝트만 유지한다.
+2. 배너 내부의 회색 미디어 영역은 레퍼런스와 같은 비율과 여백을 유지한다.
+3. GALLERY 제목은 배너를 설명하는 주제목이 아니라 장식 요소이므로 현재 크기에서 축소하고 하단 중앙에 배치한다.
+4. 검은 타원, 작은 점 배열, 휴대폰을 든 손 형태를 Gallery의 고정 페이지네이션 오브젝트로 배치한다.
+5. 슬라이드가 바뀌어도 페이지네이션 오브젝트는 항상 배너 하단 중앙에 남도록 HTML/CSS에서 슬라이드 트랙과 분리한다.
+6. 실제 작업물 이미지는 아직 없으므로 페이지네이션 오브젝트는 CSS 기반 장식으로 구성하고, 추후 미디어가 추가되어도 배너 구조를 변경하지 않는다.
+
+#### 계층별 범위
+
+- 화면: index.html의 gallery frame, gallery track, pagination ornament, GALLERY decoration
+- 처리: 기존 app.js의 800ms Gallery track 이동만 유지하고 pagination ornament에는 상태 의존성을 추가하지 않음
+- 핵심 규칙: 전체 테두리 금지, 모서리 라인만 표시, GALLERY는 축소, pagination은 고정
+- 저장·외부 서비스: 새 외부 자산과 비밀정보를 추가하지 않음
+- 의존성·앱 시작: 기존 정적 HTML/CSS/JS와 GitHub Pages artifact 경로 유지
+
+#### Process Phase와 Gate
+
+- Phase A — 기준선: 현재 Gallery HTML/CSS/800ms JS를 확인한다.
+- Phase B — HTML: 슬라이드 트랙과 페이지네이션 오브젝트의 책임을 분리한다.
+- Phase C — CSS: 프레임 코너 라인, 회색 배너, 하단 타원·점·손/휴대폰 장식을 레퍼런스 비율로 조정한다.
+- Phase D — 동작: 슬라이드 이동 중 페이지네이션이 고정되고 800ms 간격이 유지되는지 확인한다.
+- Phase E — 배포: drill 검증, PR 병합, Pages build/deploy, 실제 HTTP 응답을 확인한다.
+
+Gate 조건:
+
+- 배너 중앙 영역에 사방을 두르는 border가 없다.
+- 네 모서리 라인만 보인다.
+- GALLERY가 배너보다 작고 하단 장식 역할을 한다.
+- 검은 타원·점·손/휴대폰 오브젝트가 모든 슬라이드에서 같은 위치에 있다.
+- 800ms 슬라이드 동작과 reduced-motion 대응이 깨지지 않는다.
+- 정적 HTML/CSS/JS 구조와 로고·파비콘 경로가 유지된다.
+
+#### 실패 시 재수정 Loop
+
+1. 전체 테두리가 보이면 hero-media-slot의 border/overflow와 frame pseudo-element를 확인한다.
+2. 코너가 잘리면 슬라이드 track의 overflow와 frame 장식의 overflow 책임을 분리한다.
+3. GALLERY가 크면 font-size와 margin만 조정한다.
+4. pagination이 움직이면 track 내부에 들어간 장식을 frame 바깥 고정 요소로 이동한다.
+5. JS 실패는 app.js의 기존 Gallery 이동 로직만 점검하고 화면 마크업을 JS로 옮기지 않는다.
+6. 검증 실패 시 원인 계층만 수정한 뒤 같은 Gate를 재실행한다.
+
+#### 검증 절차
+
+- index.html에 gallery-track과 독립 pagination ornament가 존재하는지 확인
+- styles.css에 배너 전체 border가 없고 코너 pseudo-element만 있는지 확인
+- GALLERY 장식 크기와 하단 위치 규칙 확인
+- black oval, pagination dots, hand-phone ornament의 고정 위치 확인
+- app.js의 800ms interval, transform 이동, reduced-motion 조건 확인
+- node --check app.js 및 verify workflow 확인
+- Pages URL의 HTML/CSS/JS 200 응답 및 정적 문자열 확인
