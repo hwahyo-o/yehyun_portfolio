@@ -96,3 +96,51 @@
 - 기존 공개 저장소 `hwahyo-o/yehyun-s_Portfolio`의 원본 `img/favicon-96x96.png`를 `public/portfolio-favicon.png`으로 재사용했다.
 - 기존 공개 저장소의 원본 `img/이름.png`를 `public/yehyun-logo.png`으로 재사용하고 GNB 홈 버튼에 연결했다.
 - 기존 SVG 파비콘은 참조가 없어져 제거했으며, API 키·비공개 식별자는 추가하지 않았다.
+
+
+## 2026-08-11 정적 웹앱 전환 계획
+
+### 문제별 수정 계획
+
+1. React JSX 런타임과 React 의존성을 제거하고 표준 HTML 문서, CSS 스타일시트, ES 모듈 JavaScript로 전환한다.
+2. 화면 계층은 `index.html`의 시맨틱 마크업과 JS 템플릿 렌더링으로 분리한다.
+3. 표현 계층은 `styles.css` 하나로 통합하고, 기존 로딩·하이라이트·반응형 규칙을 보존한다.
+4. 처리 계층은 `app.js`의 작은 상태 컨트롤러로 통합한다. 해시 라우팅, 로딩 타이밍, 폰트 셔플, 캐러셀, 키보드·포인터 입력을 유지한다.
+5. 정적 데이터는 `projects.js`로 유지하고, 실제 작업물 자산은 추후 연결한다.
+6. 현재 저장소의 실제 로고 파일 `public/yehyun_logo.png`를 사용하며, 존재하지 않는 `yehyun-logo.png` 참조를 제거한다.
+7. Vite와 React 패키지를 제거하고 GitHub Pages workflow는 정적 파일을 `dist`로 복사해 배포하도록 단순화한다.
+
+### 계층별 목표
+
+- 화면: `index.html`의 GNB, 로딩 화면, 홈, About Me, 작업 목록, 카테고리 상세 영역
+- 처리: `app.js`의 상태 렌더링, 해시 라우팅, 3초 로딩, 300ms 셔플, 32px/400ms About Me 입력 제한
+- 핵심 규칙: 카테고리별 최신순, 첫 진입 최신 작업물, 미디어 미제공 상태 보존, 접근성 속성 유지
+- 저장·외부 서비스: `projects.js` 정적 메타데이터, `public/` 이미지 자산, 외부 웹폰트 CDN
+- 의존성 연결·앱 시작: 브라우저가 `index.html`에서 `styles.css`와 `app.js`를 직접 로드하며 npm 런타임 의존성은 사용하지 않음
+
+### Process Phase와 Gate
+
+1. Phase A — 기준선 정렬: 최신 `main`을 `drill`에 반영하고 계획 문서를 먼저 갱신한다.
+   - Gate A: 현재 이미지 자산, 라우팅, 모션 수치, Pages workflow를 확인한다.
+2. Phase B — 정적 구조 전환: HTML/CSS/JS 파일을 만들고 React/Vite 파일과 의존성을 제거한다.
+   - Gate B: `index.html` 직접 로드, JS 모듈 로드, 모든 주요 화면 템플릿 존재
+3. Phase C — 기능 동등성: 로딩, 해시 라우팅, GNB, About Me, 캐러셀, 상세 이동을 연결한다.
+   - Gate C: 기존 사용자 흐름과 키보드·포인터 입력이 동작하고 콘솔 오류가 없다.
+4. Phase D — 반응형·접근성: 모바일 레이아웃, 포커스, reduced motion, 대체 폰트를 확인한다.
+   - Gate D: 데스크톱·모바일에서 클리핑·빈 화면·오버플로가 없다.
+5. Phase E — 배포 검증: 정적 workflow, PR, Pages artifact, 실제 URL을 검증한다.
+   - Gate E: build/verify 성공, Pages 배포 성공, HTML·JS·CSS·favicon·logo 응답 200
+
+### 실패 시 재수정 Loop
+
+Gate 실패 시 실패한 계층만 원인 방향으로 수정한다. HTML 로딩 실패는 경로·마크업을, JS 실패는 모듈·상태 전이를, CSS 문제는 해당 반응형 규칙을, 배포 실패는 artifact 경로를 먼저 수정한 후 같은 Gate를 재실행한다. 구조 전환으로 인한 회귀가 확인되면 Phase B부터 다시 검증한다.
+
+### 검증 절차
+
+- 파일 목록에서 `.jsx`, React import, Vite plugin과 패키지 의존성 제거 확인
+- 정적 workflow의 파일 복사와 Pages artifact 생성 확인
+- 로딩 최초 표시부터 3000ms 전환, 300ms 폰트 셔플 확인
+- 해시 홈·카테고리 라우팅, GNB 클릭, 이전·다음, 최상단 이동 확인
+- About Me 포인터 32px 거리와 400ms 쿨다운 확인
+- 실제 로고 `/yehyun_portfolio/yehyun_logo.png`와 favicon 응답 확인
+- Browser 도구가 가능하면 DOM·콘솔·스크린샷·상호작용을 확인하고, 불가능하면 정적 HTTP와 workflow 증거를 분리 기록한다.
