@@ -1,4 +1,4 @@
-name: Verify portfolio build
+name: Verify static portfolio
 
 on:
   push:
@@ -10,12 +10,22 @@ permissions:
   contents: read
 
 jobs:
-  build:
+  verify:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 20
-      - run: npm install
-      - run: npm run build
+      - name: Verify static entry points
+        run: |
+          test -f index.html
+          test -f styles.css
+          test -f app.js
+          test -f projects.js
+          test -f public/portfolio-favicon.png
+          test -f public/yehyun_logo.png
+          test ! -e package.json
+          test ! -e vite.config.js
+          test ! -e src/App.jsx
+          test ! -e src/main.jsx
+          test ! -e src/projects.js
+          test ! -e src/styles.css
+          ! grep -R "from 'react'\|from 'react-dom'\|@vitejs/plugin-react" --exclude-dir=.git .
