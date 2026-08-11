@@ -621,3 +621,7 @@ button:focus-visible { outline: 2px solid var(--ink); outline-offset: 4px; }
   .project-nav-card { min-width: 0; }
   .project-nav-thumb { width: 58px; }
 }
+
+/* Keep the gallery frame visible while clipping only the moving rail. */
+.hero-media-slot { overflow: visible; }
+.gallery-track { overflow: hidden; }
