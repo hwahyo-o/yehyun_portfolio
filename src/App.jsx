@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { categories, getProjects } from './projects.js';
 
 const fonts = [
@@ -22,10 +22,10 @@ function LoadingScreen({ onComplete }) {
   useEffect(() => {
     let interval;
     const shuffleStart = window.setTimeout(() => {
-      interval = window.setInterval(() => setFont((current) => randomFont(current)), 100);
-    }, 1100);
-    const stopShuffle = window.setTimeout(() => window.clearInterval(interval), 1900);
-    const complete = window.setTimeout(onComplete, 2000);
+      interval = window.setInterval(() => setFont((current) => randomFont(current)), 300);
+    }, 1200);
+    const stopShuffle = window.setTimeout(() => window.clearInterval(interval), 2900);
+    const complete = window.setTimeout(onComplete, 3000);
 
     return () => {
       window.clearTimeout(shuffleStart);
@@ -71,15 +71,37 @@ function navigate(route) {
 function useNameShuffle() {
   const [font, setFont] = useState(fonts[0]);
   const frame = useRef(0);
+  const lastPointer = useRef(null);
+  const lastShuffleAt = useRef(0);
 
-  const shuffle = () => {
+  const shuffle = useCallback(() => {
+    const now = performance.now();
+    if (now - lastShuffleAt.current < 400) return;
+
+    lastShuffleAt.current = now;
     window.cancelAnimationFrame(frame.current);
     frame.current = window.requestAnimationFrame(() => setFont((current) => randomFont(current)));
-  };
+  }, []);
+
+  const shuffleFromPointer = useCallback((event) => {
+    const point = { x: event.clientX, y: event.clientY };
+    const previous = lastPointer.current;
+    lastPointer.current = point;
+
+    if (!previous) return;
+
+    const distance = Math.hypot(point.x - previous.x, point.y - previous.y);
+    if (distance >= 32) shuffle();
+  }, [shuffle]);
+
+  const handlePointerEnter = useCallback(() => {
+    lastPointer.current = null;
+    shuffle();
+  }, [shuffle]);
 
   useEffect(() => () => window.cancelAnimationFrame(frame.current), []);
 
-  return { font, shuffle };
+  return { font, shuffle, shuffleFromPointer, handlePointerEnter };
 }
 
 function Gnb() {
@@ -100,7 +122,7 @@ function Gnb() {
 }
 
 function AboutMe() {
-  const { font, shuffle } = useNameShuffle();
+  const { font, shuffle, shuffleFromPointer, handlePointerEnter } = useNameShuffle();
 
   return (
     <section className="about-section" id="about">
@@ -109,8 +131,8 @@ function AboutMe() {
         <button
           className="name-display"
           style={{ fontFamily: font }}
-          onPointerEnter={shuffle}
-          onPointerMove={shuffle}
+          onPointerEnter={handlePointerEnter}
+          onPointerMove={shuffleFromPointer}
           onFocus={shuffle}
           aria-label="Yang Ye Hyun, move the pointer or focus to shuffle the font"
         >
