@@ -30,4 +30,4 @@ jobs:
           test ! -e src/styles.css
           node --check app.js
           node --check projects.js
-          ! grep -R "from 'react'\|from 'react-dom'\|@vitejs/plugin-react" --exclude-dir=.git .
+          ! grep -R "from 'react'\|from 'react-dom'\|@vitejs/plugin-react" --exclude-dir=.git --exclude-dir=.github --exclude='*.yml' .
