@@ -17,7 +17,7 @@ python -m http.server
 - `index.html`: 시맨틱 화면 진입점과 외부 자산 연결
 - `styles.css`: 웹폰트, 레이아웃, 모션, 반응형 스타일
 - `app.js`: 로딩 타이밍, 폰트 셔플, 해시 라우팅, 캐러셀, 접근성 입력 처리
-- `projects.js`: 최신순 작업물 데이터 연결 지점
+- `app.js`: 최신순 작업물 데이터와 화면 처리
 - `public/`: 파비콘과 YeHyun 로고 원본 자산
 - `.github/workflows/deploy.yml`: 정적 파일 GitHub Pages 배포
 - `docs/implementation-plan.md`: 계층 설계, Gate, 실패 Loop, 검증 절차

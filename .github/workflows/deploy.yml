@@ -23,7 +23,7 @@ jobs:
         run: |
           rm -rf dist
           mkdir -p dist
-          cp index.html styles.css app.js projects.js dist/
+          cp index.html styles.css app.js dist/
           cp -R public/. dist/public/
       - uses: actions/upload-pages-artifact@v3
         with:

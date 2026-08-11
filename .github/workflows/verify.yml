@@ -19,7 +19,6 @@ jobs:
           test -f index.html
           test -f styles.css
           test -f app.js
-          test -f projects.js
           test -f public/portfolio-favicon.png
           test -f public/yehyun_logo.png
           test ! -e package.json
@@ -29,5 +28,4 @@ jobs:
           test ! -e src/projects.js
           test ! -e src/styles.css
           node --check app.js
-          node --check projects.js
           ! grep -R "from 'react'\|from 'react-dom'\|@vitejs/plugin-react" --exclude-dir=.git --exclude-dir=.github --exclude='*.yml' .

@@ -10,7 +10,145 @@
     <title>YeHyun — Portfolio 2026</title>
   </head>
   <body>
-    <div id="app"></div>
-    <script type="module" src="./app.js"></script>
+    <div id="app">
+      <div class="site-shell is-loading" id="site-shell">
+        <header class="gnb">
+          <button class="logo-button" data-route="home" aria-label="YeHyun home">
+            <img src="./public/yehyun_logo.png" alt="YeHyun">
+          </button>
+          <nav aria-label="Portfolio categories">
+            <button data-route="category/UX%2FUI">UX/UI</button>
+            <button data-route="category/Graphic">Graphic</button>
+            <button data-route="category/Video">Video</button>
+          </nav>
+        </header>
+
+        <main class="page page-content" id="home-page" data-page="home">
+          <section class="about-section" id="about">
+            <p class="section-label">About Me</p>
+            <div class="about-heading-row">
+              <button
+                class="name-display"
+                id="name-display"
+                aria-label="Yang Ye Hyun, move the pointer or focus to shuffle the font"
+              >Yang Ye Hyun</button>
+              <dl class="contact-list">
+                <div><dt>Mail</dt><dd>ajas03974@gmail.com</dd></div>
+                <div><dt>Phone</dt><dd>010-6797-0462</dd></div>
+              </dl>
+              <div class="tool-strip" aria-label="Tools">
+                <span class="tool-chip">Ps</span>
+                <span class="tool-chip">Pr</span>
+                <span class="tool-chip">Ae</span>
+                <span class="tool-chip">Ai</span>
+                <span class="tool-chip">Xd</span>
+                <span class="tool-chip">VS</span>
+                <span class="tool-chip">HTML</span>
+                <span class="tool-chip">CSS</span>
+                <span class="tool-chip">JS</span>
+                <span class="tool-chip">Figma</span>
+              </div>
+            </div>
+            <div class="about-divider"></div>
+            <div class="resume-grid">
+              <div>
+                <p><strong>2015년 입학</strong> 영주 선영여자고등학교 / 미술중점반(디자인)</p>
+                <p class="resume-subline">2015년 교내 미술 전시 팜플렛 제작활동</p>
+                <p><strong>2018년 졸업</strong> 영주선영여자고등학교 졸업 / 미술중점반(디자인)</p>
+              </div>
+              <div>
+                <p><strong>GTQ - 포토샵 1급</strong> 2024년 5월 / 한국생산성본부</p>
+                <p><strong>GTQ - 일러스트 1급</strong> 2024년 5월 / 한국생산성본부</p>
+                <p><strong>웹디자인기능사</strong> 2024년 9월 / 한국산업인력공단</p>
+                <p><strong>컴퓨터그래픽스운용기능사</strong> 2024년 9월 / 한국산업인력공단</p>
+              </div>
+            </div>
+          </section>
+
+          <section class="work-section" id="works">
+            <p class="work-intro">Selected works, in reverse chronological order.</p>
+            <div class="carousel-list">
+              <section class="carousel-section" aria-labelledby="carousel-uxui">
+                <div class="carousel-heading">
+                  <h2 id="carousel-uxui">UX/UI</h2>
+                  <div class="carousel-controls">
+                    <button disabled aria-label="UX/UI previous project">←</button>
+                    <button disabled aria-label="UX/UI next project">→</button>
+                  </div>
+                </div>
+                <div class="empty-project" role="status">
+                  작업물 자산을 준비 중입니다.
+                  <span>프로젝트 정보와 미디어가 추가되면 최신순으로 표시됩니다.</span>
+                </div>
+              </section>
+              <section class="carousel-section" aria-labelledby="carousel-graphic">
+                <div class="carousel-heading">
+                  <h2 id="carousel-graphic">Graphic</h2>
+                  <div class="carousel-controls">
+                    <button disabled aria-label="Graphic previous project">←</button>
+                    <button disabled aria-label="Graphic next project">→</button>
+                  </div>
+                </div>
+                <div class="empty-project" role="status">
+                  작업물 자산을 준비 중입니다.
+                  <span>프로젝트 정보와 미디어가 추가되면 최신순으로 표시됩니다.</span>
+                </div>
+              </section>
+              <section class="carousel-section" aria-labelledby="carousel-video">
+                <div class="carousel-heading">
+                  <h2 id="carousel-video">Video</h2>
+                  <div class="carousel-controls">
+                    <button disabled aria-label="Video previous project">←</button>
+                    <button disabled aria-label="Video next project">→</button>
+                  </div>
+                </div>
+                <div class="empty-project" role="status">
+                  작업물 자산을 준비 중입니다.
+                  <span>프로젝트 정보와 미디어가 추가되면 최신순으로 표시됩니다.</span>
+                </div>
+              </section>
+            </div>
+          </section>
+          <button class="top-button" data-action="top">Back to top ↑</button>
+        </main>
+
+        <main class="page page-content category-page" id="category-page" data-page="category" hidden>
+          <div class="category-nav">
+            <button disabled>← Previous</button>
+            <div class="category-title">
+              <p id="category-name">UX/UI</p>
+              <h1>Projects</h1>
+              <span>작업물 준비 중</span>
+            </div>
+            <button disabled>Next →</button>
+          </div>
+          <div class="detail-empty">
+            <h2>작업물 상세 페이지를 준비 중입니다.</h2>
+            <p>프로젝트 정보와 이미지·영상 자산을 제공하면 이 화면에 연결됩니다.</p>
+          </div>
+          <div class="bottom-project-nav">
+            <button disabled>← Previous project</button>
+            <button disabled>Next project →</button>
+          </div>
+        </main>
+      </div>
+
+      <div class="loading-layer" id="loading-layer" aria-label="Portfolio loading">
+        <section class="loading-screen">
+          <div class="loading-lockup">
+            <div class="loading-title" aria-label="Portfolio 2026">
+              <span class="loading-word loading-highlight">Portfolio</span>
+              <span class="loading-word">2026</span>
+            </div>
+            <div class="loading-meta">
+              <span>Yang Ye Hyun</span>
+              <span class="loading-rule" aria-hidden="true"></span>
+              <span>visual designer / portfolio</span>
+            </div>
+          </div>
+        </section>
+      </div>
+    </div>
+    <script defer src="./app.js"></script>
   </body>
 </html>
