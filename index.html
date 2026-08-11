@@ -28,8 +28,21 @@
             <div class="hero-side hero-side-left" aria-hidden="true"></div>
             <div class="hero-frame">
               <p class="hero-kicker">-YEHYUN COLLECTION-</p>
-              <div class="hero-media-slot" data-media-slot="gallery-cover">
-                <span>추후 대표 이미지를 연결할 수 있는 영역입니다.</span>
+              <div class="hero-media-slot">
+                <div class="gallery-track" id="gallery-track" aria-live="polite">
+                  <div class="gallery-slide" data-gallery-slide data-media-slot="gallery-cover-01">
+                    <span>추후 대표 이미지를 연결할 수 있는 영역입니다.</span>
+                  </div>
+                  <div class="gallery-slide" data-gallery-slide data-media-slot="gallery-cover-02">
+                    <span>Yang Ye Hyun visual archive</span>
+                  </div>
+                  <div class="gallery-slide" data-gallery-slide data-media-slot="gallery-cover-03">
+                    <span>Selected work collection</span>
+                  </div>
+                  <div class="gallery-slide" data-gallery-slide data-media-slot="gallery-cover-01-copy" aria-hidden="true">
+                    <span>추후 대표 이미지를 연결할 수 있는 영역입니다.</span>
+                  </div>
+                </div>
               </div>
               <h1 id="gallery-title">GALLERY</h1>
             </div>
@@ -144,31 +157,44 @@
 
         <main class="page page-content category-page" id="category-page" data-page="category" hidden>
           <section class="category-hero">
-            <div class="category-side-slot project-slot" data-media-slot="category-previous"><span>Previous</span></div>
+            <button class="project-thumb project-thumb-prev" data-project-nav="previous" disabled aria-label="이전 작업물">
+              <span class="project-thumb-media" data-media-slot="category-previous">Previous</span>
+              <small>Previous</small>
+            </button>
             <div class="category-title">
               <p id="category-name">UX/UI</p>
-              <h1>Selected Work</h1>
-              <span>최신 작업물부터 표시됩니다.</span>
+              <h1 id="category-project-title">Selected Work</h1>
+              <span id="category-period">제작 기간: 추후 입력</span>
             </div>
-            <div class="category-side-slot project-slot" data-media-slot="category-next"><span>Next</span></div>
+            <button class="project-thumb project-thumb-next" data-project-nav="next" disabled aria-label="다음 작업물">
+              <span class="project-thumb-media" data-media-slot="category-next">Next</span>
+              <small>Next</small>
+            </button>
           </section>
           <section class="detail-layout" aria-labelledby="category-detail-title">
             <div class="detail-media project-slot project-slot-detail" data-media-slot="project-detail">
-              <span>작업물 이미지·영상이 들어갈 영역입니다.</span>
+              <span>최신 작업물의 이미지·영상이 들어갈 영역입니다.</span>
             </div>
             <div class="detail-copy">
               <p class="detail-index">01 / LATEST PROJECT</p>
-              <h2 id="category-detail-title">작업물 상세 페이지</h2>
+              <h2 id="category-detail-title">최신 작업물 상세</h2>
               <p>프로젝트 제목, 제작 기간, 역할과 상세 설명을 자산 제공 후 연결할 수 있습니다.</p>
               <dl>
                 <div><dt>Period</dt><dd>추후 입력</dd></div>
                 <div><dt>Role</dt><dd>추후 입력</dd></div>
+                <div><dt>Category</dt><dd id="category-detail-name">UX/UI</dd></div>
               </dl>
             </div>
           </section>
           <div class="bottom-project-nav">
-            <button disabled>← Previous project</button>
-            <button disabled>Next project →</button>
+            <button class="project-nav-card" data-project-nav="previous" disabled>
+              <span class="project-nav-thumb" data-media-slot="bottom-previous">←</span>
+              <span><small>Previous project</small><strong>이전 작업물</strong></span>
+            </button>
+            <button class="project-nav-card project-nav-card-next" data-project-nav="next" disabled>
+              <span><small>Next project</small><strong>다음 작업물</strong></span>
+              <span class="project-nav-thumb" data-media-slot="bottom-next">→</span>
+            </button>
           </div>
           <button class="top-button" data-action="top">TOP <span aria-hidden="true">↑</span></button>
         </main>
