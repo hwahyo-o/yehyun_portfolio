@@ -10,16 +10,20 @@
 python -m http.server
 ```
 
-또는 VS Code Live Server로 `index.html`을 엽니다.
+또는 VS Code Live Server로 index.html을 엽니다.
 
 ## 구조
 
-- `index.html`: 시맨틱 화면 진입점과 외부 자산 연결
-- `styles.css`: 웹폰트, 레이아웃, 모션, 반응형 스타일
-- `app.js`: 로딩 타이밍, 폰트 셔플, 해시 라우팅, 캐러셀, 접근성 입력 처리
-- `app.js`: 최신순 작업물 데이터와 화면 처리
-- `public/`: 파비콘과 YeHyun 로고 원본 자산
-- `.github/workflows/deploy.yml`: 정적 파일 GitHub Pages 배포
-- `docs/implementation-plan.md`: 계층 설계, Gate, 실패 Loop, 검증 절차
+- index.html: 로딩 화면, GNB, GalleryHero, 작업물 rail, About/이력서, 카테고리 상세의 정적 화면 마크업
+- styles.css: 웹폰트, 레퍼런스 기반 색상·레이아웃·카드·반응형·모션
+- app.js: 3초 로딩, 300ms 폰트 셔플, About Me 입력 제한, 해시 페이지 이동, 버튼 작동
+- public/: 파비콘과 YeHyun 로고 원본 자산
+- .github/workflows/deploy.yml: 정적 파일 GitHub Pages 배포
+- .github/workflows/verify.yml: 정적 진입점과 JavaScript 구문 검증
+- docs/implementation-plan.md: 화면·처리·핵심 규칙·외부 서비스·앱 시작 계층, Process Phase, Gate, 실패 Loop, 검증 절차
 
-실제 이미지·영상은 추후 `projects.js`의 프로젝트 데이터에 연결합니다.
+## 미디어 자산
+
+실제 이미지·영상은 아직 제공되지 않았습니다. 현재 작업물 영역은 추후 자산을 연결할 수 있는 명시적 슬롯으로 표시됩니다. 자산을 추가할 때에는 제목, 제작 기간, 설명, publishedAt, media 경로를 함께 연결하고 최신순 규칙을 유지합니다.
+
+비밀정보나 API 키는 코드와 문서에 기록하지 않습니다.
