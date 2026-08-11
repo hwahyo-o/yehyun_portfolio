@@ -108,7 +108,7 @@ function Gnb() {
   return (
     <header className="gnb">
       <button className="logo-button" onClick={() => navigate('home')} aria-label="YeHyun home">
-        YeHyun
+        <img src="/yehyun_portfolio/yehyun-logo.png" alt="YeHyun" />
       </button>
       <nav aria-label="Portfolio categories">
         {categories.map((category) => (
