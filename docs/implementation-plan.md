@@ -89,3 +89,10 @@
 - 로딩 화면의 최초 표시 기준 전환 시간을 3000ms로 조정했다.
 - 로딩 폰트 셔플 주기를 300ms로 조정했다.
 - About Me 폰트 셔플은 포인터 이동 거리 32px 이상과 400ms 쿨다운을 모두 만족할 때만 실행한다.
+
+
+### 2026-08-11 파비콘·GNB 로고 자산 교체
+
+- 기존 공개 저장소 `hwahyo-o/yehyun-s_Portfolio`의 원본 `img/favicon-96x96.png`를 `public/portfolio-favicon.png`으로 재사용했다.
+- 기존 공개 저장소의 원본 `img/이름.png`를 `public/yehyun-logo.png`으로 재사용하고 GNB 홈 버튼에 연결했다.
+- 기존 SVG 파비콘은 참조가 없어져 제거했으며, API 키·비공개 식별자는 추가하지 않았다.
