@@ -117,7 +117,7 @@ async function route(request, env) {
     }
     return json({ error: { code: 'NOT_FOUND', message: '요청 경로를 찾을 수 없습니다.' } }, 404);
   } catch (error) {
-    console.error(error);
+    console.error('request_failed', { code: error.code || 'INTERNAL_ERROR', status: error.status || 500 });
     return json({ error: { code: error.code || 'INTERNAL_ERROR', message: error.publicMessage || '서버 오류가 발생했습니다.' } }, error.status || 500);
   }
 }
@@ -894,7 +894,7 @@ async function requireAdmin(request, env) {
       const refreshToken = await decryptSecret(row.refresh_token_ciphertext, row.refresh_token_iv, env.SESSION_ENCRYPTION_KEY);
       const refreshed = await refreshFirebaseToken(refreshToken, env);
       const claims = await verifyFirebaseToken(refreshed.idToken, env);
-      if (claims.sub !== row.uid || !await isAdmin(claims.sub, env)) throw httpError('FORBIDDEN', '관리자 권한이 없습니다.', 403);
+      if (claims.sub !== row.uid || !await isAdmin(claims, env)) throw httpError('FORBIDDEN', '관리자 권한이 없습니다.', 403);
       if (refreshed.refreshToken && refreshed.refreshToken !== refreshToken) {
         const encrypted = await encryptSecret(refreshed.refreshToken, env.SESSION_ENCRYPTION_KEY);
         await env.DB.prepare('UPDATE admin_sessions SET refresh_token_ciphertext = ?, refresh_token_iv = ?, updated_at = ? WHERE id = ?')
@@ -912,14 +912,14 @@ async function requireAdmin(request, env) {
   const token = getBearer(request);
   if (!token) throw httpError('AUTH_REQUIRED', '관리자 로그인이 필요합니다.', 401);
   const claims = await verifyFirebaseToken(token, env);
-  if (!await isAdmin(claims.sub, env)) throw httpError('FORBIDDEN', '관리자 권한이 없습니다.', 403);
+  if (!await isAdmin(claims, env)) throw httpError('FORBIDDEN', '관리자 권한이 없습니다.', 403);
   return claims;
 }
 
-async function isAdmin(uid, env) {
-  if (env.ADMIN_UIDS) return env.ADMIN_UIDS.split(',').map((value) => value.trim()).includes(uid);
-  const row = await env.DB.prepare('SELECT 1 FROM admin_roles WHERE uid = ?').bind(uid).first();
-  return Boolean(row);
+async function isAdmin(claims, env) {
+  const configuredEmail = normalizeEmail(env.ADMIN_EMAIL);
+  if (!configuredEmail) throw httpError('AUTH_NOT_CONFIGURED', '관리자 로그인 설정이 필요합니다.', 503);
+  return normalizeEmail(claims?.email) === configuredEmail;
 }
 
 async function startFirebaseGoogleLogin(env) {
@@ -1001,7 +1001,7 @@ async function finishFirebaseGoogleLogin(request, env) {
 
   try {
     const claims = await verifyFirebaseToken(firebasePayload.idToken, env);
-    if (claims.sub !== firebasePayload.localId || !await isAdmin(claims.sub, env)) {
+    if (claims.sub !== firebasePayload.localId || !await isAdmin(claims, env)) {
       return oauthRedirect(env, 'admin-google-login-forbidden');
     }
     const sessionResponse = await createAdminSession(firebasePayload, claims.email || firebasePayload.email || '', env, claims);
@@ -1021,7 +1021,7 @@ async function loginAdmin(request, env) {
   if (!email || password.length < 1 || password.length > 256) {
     throw httpError('AUTH_FAILED', '이메일 또는 비밀번호를 확인해주세요.', 401);
   }
-  if (!env.FIREBASE_WEB_API_KEY || !env.SESSION_ENCRYPTION_KEY) {
+  if (!env.DB || !env.FIREBASE_WEB_API_KEY || !env.SESSION_ENCRYPTION_KEY || !env.ADMIN_EMAIL) {
     throw httpError('AUTH_NOT_CONFIGURED', '관리자 로그인을 사용할 수 없습니다.', 503);
   }
 
@@ -1054,7 +1054,7 @@ async function loginAdmin(request, env) {
   if (claims.sub !== payload.localId) {
     throw httpError('AUTH_TOKEN_VERIFY_FAILED', '로그인 토큰을 확인할 수 없습니다.', 503);
   }
-  if (!await isAdmin(claims.sub, env)) throw httpError('FORBIDDEN', '관리자 권한이 등록되지 않은 계정입니다.', 403);
+  if (!await isAdmin(claims, env)) throw httpError('FORBIDDEN', '관리자 권한이 등록되지 않은 계정입니다.', 403);
 
   try {
     return await createAdminSession(payload, email, env, claims);
@@ -1066,7 +1066,7 @@ async function loginAdmin(request, env) {
 
 async function createAdminSession(payload, email, env, claims = null) {
   const resolvedClaims = claims || await verifyFirebaseToken(payload.idToken, env);
-  if (resolvedClaims.sub !== payload.localId || !await isAdmin(resolvedClaims.sub, env)) {
+  if (resolvedClaims.sub !== payload.localId || !await isAdmin(resolvedClaims, env)) {
     throw httpError('FORBIDDEN', '관리자 권한이 등록되지 않은 계정입니다.', 403);
   }
   try {
@@ -1206,6 +1206,10 @@ function encode(bytes) {
 
 function cleanText(value, maxLength) {
   return String(value || '').trim().replace(/[<>]/g, '').slice(0, maxLength);
+}
+
+function normalizeEmail(value) {
+  return String(value || '').trim().toLowerCase();
 }
 
 function isSafeId(value) {
