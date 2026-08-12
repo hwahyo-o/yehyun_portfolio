@@ -86,25 +86,27 @@ The D1 workflow uses only the two GitHub secrets above to authenticate Wrangler.
 
 ## GitHub Actions D1 migration
 
-The repository includes .github/workflows/apply-d1-migrations.yml. It is manual-only, so a normal GitHub commit does not change the production database.
+The repository includes two manual-only workflows. A normal GitHub commit never changes the production database.
 
-Before running it:
+Before running either workflow:
 
-1. In Cloudflare, create an API Token with Account -> D1 -> Edit permission. D1 writes require D1:Edit.
+1. In Cloudflare, create an API Token with Account -> D1 -> Edit permission.
 2. Copy the Cloudflare Account ID from the dashboard.
 3. In GitHub, open Settings -> Secrets and variables -> Actions.
-4. Add these repository secrets:
-   - CLOUDFLARE_API_TOKEN: the Cloudflare API token.
-   - CLOUDFLARE_ACCOUNT_ID: the Cloudflare account ID.
-5. Open the repository Actions tab.
-6. Select Apply D1 migrations.
-7. Select the drill branch and choose Run workflow.
-8. In the confirmation field, enter exactly APPLY_D1.
-9. Confirm that the workflow completes all three steps: initial schema, administrator feature schema, and required-table verification.
+4. Add repository secrets named `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID`.
+5. Do not add Firebase keys, OAuth secrets, refresh tokens, or encryption keys to GitHub for this task.
 
-The workflow applies the two SQL files to the remote database through Wrangler. It does not register an administrator account. Run it once for an empty database. Do not run it again after migration 002 has succeeded because its ALTER TABLE statements are intentionally not repeatable.
+For a new database, or when no previous migration workflow has succeeded:
 
-If the workflow fails, do not register admin_roles. Read the failed step output and report the step name and error text without sharing the API token.
+1. Open Actions -> Apply D1 migrations.
+2. Choose the `drill` branch and select Run workflow.
+3. Enter exactly `APPLY_D1` in the confirmation field.
+4. Run it once.
+5. Confirm the steps for schema 001, schema 002, schema 003, and required-table verification all succeed.
+
+If schemas 001 and 002 already succeeded in an earlier run, do not run the full workflow again. Use Actions -> Apply D1 session migration, choose `drill`, enter exactly `APPLY_SESSION_MIGRATION`, and run it once.
+
+The workflows do not register an administrator account. Do not add an `admin_roles` row until the final implementation, Worker deployment, and verification gates pass. If a migration workflow fails, do not register an administrator; report only the failed step and error text, never the API token.
 
 ## D1 migration and administrator setup
 
