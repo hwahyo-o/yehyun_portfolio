@@ -139,6 +139,10 @@ async function listAdminPosts(env) {
 
 async function createAdminPost(request, env, claims) {
   const { input, mediaFiles } = await readPostInput(request);
+  const totalUploadBytes = sourceByteLength(input) + mediaFiles.reduce((sum, item) => sum + item.sizeBytes, 0);
+  if (totalUploadBytes > 150 * 1024 * 1024) {
+    throw httpError('INVALID_MEDIA', '게시물 전체 용량은 150MB까지입니다.', 400);
+  }
   if (!env.GITHUB_CONTENT_TOKEN || !env.GITHUB_REPOSITORY) {
     throw httpError('CONTENT_PUBLISH_NOT_CONFIGURED', 'Content 배포 설정이 필요합니다.', 503);
   }
@@ -219,6 +223,12 @@ async function readPostInput(request) {
   };
   const files = form.getAll('media').filter((value) => value && typeof value.arrayBuffer === 'function' && typeof value.name === 'string');
   return { input: validatePostInput(body), mediaFiles: validateMediaFiles(files) };
+}
+
+function sourceByteLength(input) {
+  return new TextEncoder().encode(input.html).byteLength
+    + new TextEncoder().encode(input.css).byteLength
+    + new TextEncoder().encode(input.js).byteLength;
 }
 
 function validateMediaFiles(files) {
