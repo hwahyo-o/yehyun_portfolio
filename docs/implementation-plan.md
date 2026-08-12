@@ -298,7 +298,7 @@ Gate 조건:
 4. 기존 GNB, Gallery 장식, 카드, 이력서, 로딩 화면의 시각 방향과 동작을 Bootstrap 기본값 때문에 변경하지 않는다.
 5. Bootstrap JavaScript, npm, React, Vite, 빌드 도구는 추가하지 않는다. 현재 페이지에는 Bootstrap JS 컴포넌트가 필요하지 않다.
 6. Bootstrap으로 대체할 수 없는 로고·파비콘·Gallery 손/휴대폰·타원 장식은 기존 정적 자산과 CSS를 유지한다.
-7. CDN 의존성에는 버전과 SRI 무결성 값을 고정하고, API 키·토큰·비공개 식별자는 추가하지 않는다.
+7. Bootstrap CSS에는 버전과 공식 SRI 무결성 값을 고정하고, Bootstrap Icons는 공식 고정 버전 HTTPS CDN URL을 사용한다. API 키·토큰·비공개 식별자는 추가하지 않는다.
 8. 사용하지 않는 Bootstrap 클래스나 중복 아이콘 표현을 남기지 않는다.
 
 #### 계층별 범위
@@ -330,7 +330,7 @@ Gate B:
 Gate C:
 - Bootstrap 5.3.8 CSS link가 styles.css보다 앞선다.
 - Bootstrap Icons 1.13.1 link가 존재한다.
-- Bootstrap CSS와 Icons 모두 HTTPS와 SRI를 사용한다.
+- Bootstrap CSS는 HTTPS와 공식 SRI를 사용하고, Bootstrap Icons는 공식 고정 버전 HTTPS URL을 사용한다. Icons 공식 CDN 사용 예에는 SRI 값이 제공되지 않으므로 임의의 hash를 추가하지 않는다.
 - Bootstrap JS, Popper, npm, React, Vite를 추가하지 않는다.
 
 Gate D:
@@ -378,7 +378,7 @@ Gate F:
 
 - 문서 선커밋 SHA 확인
 - index.html의 Bootstrap CSS → Bootstrap Icons → styles.css 순서 확인
-- Bootstrap 버전과 SRI 문자열 확인
+- Bootstrap CSS 버전·SRI 문자열과 Bootstrap Icons 고정 버전 URL 확인
 - node --check app.js
 - Bootstrap JS, Popper, npm, React, Vite 참조 부재 확인
 - 기능성 화살표의 Bootstrap Icons class 확인
