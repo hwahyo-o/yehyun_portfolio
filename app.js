@@ -45,6 +45,8 @@ const adminSessionTools = document.querySelector('#admin-session-tools');
 const adminLoginModal = document.querySelector('#admin-login-modal');
 const adminLoginForm = document.querySelector('#admin-login-form');
 const adminLoginStatus = document.querySelector('#admin-login-status');
+const adminPasswordInput = document.querySelector('#admin-password');
+const adminPasswordToggle = document.querySelector('[data-password-action="toggle"]');
 const settingsModal = document.querySelector('#settings-modal');
 const notificationCenter = document.querySelector('#notification-center');
 const notificationList = document.querySelector('#notification-list');
@@ -538,6 +540,30 @@ async function downloadBackup(id) {
   URL.revokeObjectURL(url);
 }
 
+function bindAdminPasswordActions() {
+  document.querySelectorAll('[data-password-action]').forEach((button) => {
+    button.addEventListener('click', () => {
+      if (!adminPasswordInput) return;
+      if (button.dataset.passwordAction === 'clear') {
+        adminPasswordInput.value = '';
+        adminPasswordInput.type = 'password';
+        adminPasswordToggle?.setAttribute('aria-pressed', 'false');
+        adminPasswordToggle?.setAttribute('aria-label', '비밀번호 표시');
+        const icon = adminPasswordToggle?.querySelector('i');
+        icon?.classList.replace('bi-eye-slash', 'bi-eye');
+        adminPasswordInput.focus();
+        return;
+      }
+      const visible = adminPasswordInput.type === 'text';
+      adminPasswordInput.type = visible ? 'password' : 'text';
+      button.setAttribute('aria-pressed', String(!visible));
+      button.setAttribute('aria-label', visible ? '비밀번호 표시' : '비밀번호 숨기기');
+      button.querySelector('i')?.classList.toggle('bi-eye', visible);
+      button.querySelector('i')?.classList.toggle('bi-eye-slash', !visible);
+    });
+  });
+}
+
 function bindAdminActions() {
   adminPostForm?.addEventListener('submit', async (event) => {
     event.preventDefault();
@@ -715,6 +741,7 @@ updatePage();
 initTheme();
 bindNameShuffle();
 bindCommunityActions();
+bindAdminPasswordActions();
 bindAdminActions();
 loadCommunity();
 startGalleryLoop();
