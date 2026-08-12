@@ -200,15 +200,19 @@ function initTheme() {
 }
 
 async function authHeaders() {
-  return { 'Content-Type': 'application/json', 'X-Portfolio-Request': 'portfolio-app' };
+  return { 'X-Portfolio-Request': 'portfolio-app' };
 }
 
 async function apiRequest(path, options = {}) {
   if (!apiBase) throw new Error('API가 설정되지 않았습니다.');
+  const headers = { ...(await authHeaders()), ...(options.headers || {}) };
+  if (options.body && !(options.body instanceof FormData) && !headers['Content-Type']) {
+    headers['Content-Type'] = 'application/json';
+  }
   const response = await fetch(apiBase + path, {
     ...options,
     credentials: 'include',
-    headers: { ...(await authHeaders()), ...(options.headers || {}) },
+    headers,
   });
   const payload = await response.json().catch(() => ({}));
   if (!response.ok) {
