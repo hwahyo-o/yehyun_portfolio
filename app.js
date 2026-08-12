@@ -198,7 +198,7 @@ function initTheme() {
 }
 
 async function authHeaders() {
-  return { 'Content-Type': 'application/json' };
+  return { 'Content-Type': 'application/json', 'X-Portfolio-Request': 'portfolio-app' };
 }
 
 async function apiRequest(path, options = {}) {
@@ -516,6 +516,7 @@ async function setupAuthSession() {
 async function downloadBackup(id) {
   const response = await fetch(apiBase + '/api/admin/backups/' + encodeURIComponent(id) + '/download', {
     credentials: 'include',
+    headers: { 'X-Portfolio-Request': 'portfolio-app' },
   });
   if (!response.ok) throw new Error('백업 다운로드에 실패했습니다.');
   const blob = await response.blob();
