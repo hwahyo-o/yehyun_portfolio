@@ -865,3 +865,28 @@ Gate: 모든 CI 성공, 브라우저 console에 미해결 오류 없음, 실제 
 - 인증 성공 시 Firestore 지연이 세션 발급을 막지 않음
 - Google 오류가 안전한 단계별 메시지로 표시됨
 - 실제 계정 로그인은 운영자가 배포 후 화면에서 확인
+
+
+## 28. 2026-08-12 인증 안정화 구현 결과 및 검증 게이트
+
+### 적용 범위
+
+- 화면 계층: `app.js`의 인증 API 요청에 15초 AbortController 타임아웃을 적용하고, 타임아웃·인증 서비스 오류·Provider 비활성화 오류를 사용자 메시지로 구분한다.
+- 처리 계층: 관리자 이메일 로그인 제출 중복 실행을 잠그고 `finally`에서 버튼과 상태를 복구한다. 실패·지연 뒤에도 로그인 화면이 영구적으로 “로그인 중…”에 머물지 않는다.
+- 핵심 규칙 계층: Worker의 이메일·Google 인증 외부 호출에 10초 상한을 적용하고, Google OAuth 교환·Firebase `signInWithIdp` 타임아웃을 전용 hash 결과로 반환한다.
+- 저장·외부 서비스 계층: 인증 성공 응답에 대한 Firebase 활동 기록은 D1 저장을 유지하되 Firestore 기록은 `ctx.waitUntil`로 비동기 처리하여 로그인 응답을 지연시키지 않는다.
+- 의존성·앱 시작 계층: 기존 Firebase Provider/환경변수 검증과 세션 확인 흐름을 유지하며, 신규 공개 비밀값은 추가하지 않는다.
+
+### Phase별 Gate
+
+- Phase A(구현): `app.js`에 `API_TIMEOUT_MS`, `REQUEST_TIMEOUT`, 로그인 잠금·복구가 존재하고 Worker에 `fetchWithTimeout` 및 Google 오류 매핑이 존재해야 한다.
+- Phase B(정적 검증): GitHub Actions의 정적 검사 및 Worker 배포 전 검사가 성공해야 한다.
+- Phase C(운영 검증): Actions의 Worker·Pages 배포가 성공해야 한다. 실제 Firebase 계정 인증은 운영자가 배포 URL에서 이메일/Google 각각 직접 확인한다.
+
+### 실패 시 재수정 Loop
+
+정적 검사 실패 시 해당 커밋을 수정하여 drill Actions를 재실행한다. 인증 제공자 설정·OAuth Redirect URI·Firebase 계정 연결처럼 저장소 외부에서만 확인 가능한 오류가 재현되면 hash 오류 단계와 브라우저 콘솔을 기준으로 운영 설정을 보정한 뒤 동일 검증을 반복한다.
+
+### 보안 및 비밀값
+
+문서와 코드에는 API 키·Client Secret·세션 암호화 키·Firebase 서비스 계정 값을 기록하지 않는다. 해당 값은 GitHub/Cloudflare/Firebase의 비밀 저장소와 운영 설정에서만 관리한다.
