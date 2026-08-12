@@ -57,6 +57,8 @@ const backupListStatus = document.querySelector('#backup-list-status');
 const backupStatus = document.querySelector('#backup-status');
 const adminPostForm = document.querySelector('#admin-post-form');
 const publishPostStatus = document.querySelector('#publish-post-status');
+let adminLoginPending = false;
+const API_TIMEOUT_MS = 15000;
 
 function randomFont(previous) {
   const available = fonts.filter((font) => font !== previous);
@@ -221,6 +223,9 @@ const authErrorMessages = {
   GOOGLE_LOGIN_NOT_CONFIGURED: 'Google 로그인 설정이 완료되지 않았습니다.',
   GOOGLE_OAUTH_TOKEN_EXCHANGE_FAILED: 'Google 인증 교환에 실패했습니다. OAuth 설정을 확인해주세요.',
   FIREBASE_GOOGLE_SIGNIN_FAILED: 'Firebase Google 인증에 실패했습니다. Google Provider 설정을 확인해주세요.',
+  AUTH_PROVIDER_DISABLED: 'Firebase 로그인 제공자가 비활성화되어 있습니다. Authentication 설정을 확인해주세요.',
+  AUTH_UPSTREAM_TIMEOUT: '인증 서비스 응답 시간이 초과되었습니다. 잠시 후 다시 시도해주세요.',
+  REQUEST_TIMEOUT: '인증 서버 응답 시간이 초과되었습니다. 잠시 후 다시 시도해주세요.',
 };
 
 function authErrorMessage(error) {
@@ -250,22 +255,40 @@ async function recordActivity(action, entityId = null) {
 
 async function apiRequest(path, options = {}) {
   if (!apiBase) throw new Error('API가 설정되지 않았습니다.');
-  const headers = { ...(await authHeaders()), ...(options.headers || {}) };
-  if (options.body && !(options.body instanceof FormData) && !headers['Content-Type']) {
+  const { signal: callerSignal, ...requestOptions } = options;
+  const controller = new AbortController();
+  const timeoutId = window.setTimeout(() => controller.abort(), API_TIMEOUT_MS);
+  const relayAbort = () => controller.abort(callerSignal.reason);
+  callerSignal?.addEventListener('abort', relayAbort, { once: true });
+  const headers = { ...(await authHeaders()), ...(requestOptions.headers || {}) };
+  if (requestOptions.body && !(requestOptions.body instanceof FormData) && !headers['Content-Type']) {
     headers['Content-Type'] = 'application/json';
   }
-  const response = await fetch(apiBase + path, {
-    ...options,
-    credentials: 'include',
-    headers,
-  });
-  const payload = await response.json().catch(() => ({}));
-  if (!response.ok) {
-    const error = new Error(payload.error?.message || '요청을 처리하지 못했습니다.');
-    error.code = payload.error?.code || 'REQUEST_FAILED';
+  try {
+    const response = await fetch(apiBase + path, {
+      ...requestOptions,
+      credentials: 'include',
+      headers,
+      signal: controller.signal,
+    });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      const error = new Error(payload.error?.message || '요청을 처리하지 못했습니다.');
+      error.code = payload.error?.code || 'REQUEST_FAILED';
+      throw error;
+    }
+    return payload;
+  } catch (error) {
+    if (error.name === 'AbortError') {
+      const timeoutError = new Error('인증 서버 응답 시간이 초과되었습니다. 잠시 후 다시 시도해주세요.');
+      timeoutError.code = 'REQUEST_TIMEOUT';
+      throw timeoutError;
+    }
     throw error;
+  } finally {
+    window.clearTimeout(timeoutId);
+    callerSignal?.removeEventListener('abort', relayAbort);
   }
-  return payload;
 }
 
 function createText(tag, text, className = '') {
@@ -621,6 +644,7 @@ function handleGoogleLoginCallback() {
     'admin-google-login-not-configured': 'Google 로그인 서버 설정이 완료되지 않았습니다.',
     'admin-google-login-certificates-error': 'Firebase 인증서를 확인할 수 없습니다. 잠시 후 다시 시도해주세요.',
     'admin-google-login-token-error': 'Google 인증 토큰을 확인할 수 없습니다. 다시 시도해주세요.',
+    'admin-google-login-timeout': 'Google 인증 서버 응답 시간이 초과되었습니다. 잠시 후 다시 시도해주세요.',
     'admin-google-login-secret-error': '서버 보안 설정이 올바르지 않습니다. 운영 설정을 확인해주세요.',
     'admin-google-login-session-error': '로그인 세션을 저장하지 못했습니다. 잠시 후 다시 시도해주세요.',
     'admin-google-login-error': 'Google 로그인에 실패했습니다. 설정을 확인해주세요.',
@@ -652,6 +676,10 @@ function bindAdminActions() {
 
   adminLoginForm?.addEventListener('submit', async (event) => {
     event.preventDefault();
+    if (adminLoginPending) return;
+    adminLoginPending = true;
+    const submitButton = adminLoginForm.querySelector('button[type="submit"]');
+    if (submitButton) submitButton.disabled = true;
     adminLoginStatus.textContent = '로그인 중…';
     const data = new FormData(adminLoginForm);
     try {
@@ -666,6 +694,9 @@ function bindAdminActions() {
       await verifyAdminSession();
     } catch (error) {
       adminLoginStatus.textContent = authErrorMessage(error);
+    } finally {
+      adminLoginPending = false;
+      if (submitButton) submitButton.disabled = false;
     }
   });
   document.addEventListener('visibilitychange', checkAutoBackup);
