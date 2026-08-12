@@ -6,8 +6,6 @@ compatibility_date = "2026-08-12"
 FIREBASE_PROJECT_ID = "yehyun-portfolio"
 ALLOWED_ORIGIN = "https://hwahyo-o.github.io"
 FRONTEND_URL = "https://hwahyo-o.github.io/yehyun_portfolio"
-GOOGLE_CLIENT_ID = "805272266425-cqi3nl7odi9epd4denmnffqtl2stqq2o.apps.googleusercontent.com"
-FRONTEND_URL = "https://hwahyo-o.github.io/yehyun_portfolio"
 GOOGLE_REDIRECT_URI = "https://yehyun-portfolio-api.ajas03974.workers.dev/oauth/google/callback"
 
 [[d1_databases]]
@@ -15,9 +13,11 @@ binding = "DB"
 database_name = "yehyun-portfolio"
 database_id = "3a72f8d7-cf47-4afc-8b05-1773c67a0b7e"
 
-# Set secrets with Wrangler or the Cloudflare dashboard:
-# wrangler secret put GOOGLE_CLIENT_ID
-# wrangler secret put GOOGLE_CLIENT_SECRET
-# wrangler secret put GOOGLE_REFRESH_TOKEN
-# wrangler secret put GOOGLE_TOKEN_ENCRYPTION_KEY
-# Do not put secret values in this file or the repository.
+# Store all values below as Cloudflare Worker Secrets, never in this file:
+# FIREBASE_WEB_API_KEY
+# SESSION_ENCRYPTION_KEY
+# GOOGLE_CLIENT_ID
+# GOOGLE_CLIENT_SECRET
+# GOOGLE_REFRESH_TOKEN
+# GOOGLE_TOKEN_ENCRYPTION_KEY
+# CLOUDFLARE_API_TOKEN is only a GitHub Actions secret, not a Worker variable.
