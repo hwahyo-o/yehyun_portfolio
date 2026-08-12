@@ -36,3 +36,15 @@ python -m http.server
 - 로고·파비콘·Gallery 손/휴대폰·타원 장식은 기존 정적 자산과 CSS 표현을 유지합니다.
 - Bootstrap JavaScript, Popper, npm, React, Vite는 사용하지 않습니다.
 - Bootstrap CSS link에는 공식 SRI를 사용하며, Bootstrap Icons는 공식 CDN 고정 URL을 사용합니다.
+
+
+## Shared backend preparation
+
+The static site remains deployable on GitHub Pages. The optional shared backend is under `worker/`:
+
+- `worker/src/index.js`: Cloudflare Worker API, Firebase token verification, Google Drive media proxy, and OAuth callback.
+- `worker/schema/001_initial.sql`: D1 schema.
+- `worker/wrangler.toml.example`: non-secret configuration template.
+- `worker/README.md`: setup order and secret-handling rules.
+
+The frontend stays usable without an API URL and shows an offline state until the Worker is configured. Never commit OAuth client secrets, refresh tokens, Firebase Admin credentials, Cloudflare API tokens, or GitHub tokens.

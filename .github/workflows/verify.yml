@@ -19,6 +19,7 @@ jobs:
           test -f index.html
           test -f styles.css
           test -f app.js
+          test -f config.js
           test -f public/portfolio-favicon.png
           test -f public/yehyun_logo.png
           test ! -e package.json
@@ -33,4 +34,11 @@ jobs:
           grep -q 'bi-arrow-' index.html
           ! grep -q 'bootstrap.bundle.min.js\|bootstrap.min.js\|@popperjs' index.html
           node --check app.js
+          test -f worker/src/index.js
+          test -f worker/schema/001_initial.sql
+          test -f worker/schema/002_admin_backups_notifications.sql
+          test -f worker/schema/003_admin_sessions.sql
+          ! grep -R "AIza[0-9A-Za-z_-]\{20,\}\|firebase.*apiKey\|gstatic.com/firebasejs" --exclude-dir=.git --exclude-dir=.github --exclude='*.example' .
+          node --check worker/src/index.js
+          ! grep -R "BEGIN PRIVATE KEY\|GOCSPX-[0-9A-Za-z_-]\{20,\}\|ADMIN_PIN\|4896\|1234" --exclude-dir=.git --exclude-dir=.github --exclude='*.example' .
           ! grep -R "from 'react'\|from 'react-dom'\|@vitejs/plugin-react" --exclude-dir=.git --exclude-dir=.github --exclude='*.yml' .

@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="description" content="Yang Ye Hyun portfolio">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; base-uri 'none'; object-src 'none'; frame-ancestors 'none'; form-action 'self'; script-src 'self'; style-src 'self' https://cdn.jsdelivr.net; font-src 'self' https://cdn.jsdelivr.net; img-src 'self' data: https://yehyun-portfolio-api.ajas03974.workers.dev; media-src 'self' https://yehyun-portfolio-api.ajas03974.workers.dev; connect-src 'self' https://yehyun-portfolio-api.ajas03974.workers.dev;">
     <link rel="preconnect" href="https://cdn.jsdelivr.net">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-sRIl4kxILFvY47J16cr9ZwB07vP4J8+LH7qKQnuqkuIAvNWLzeN8tE5YBujZqJLB" crossorigin="anonymous">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.13.1/font/bootstrap-icons.min.css">
@@ -22,7 +23,24 @@
             <button data-route="category/UX%2FUI">UX/UI <i class="bi bi-arrow-down-short" aria-hidden="true"></i></button>
             <button data-route="category/Graphic">Graphic <i class="bi bi-arrow-down-short" aria-hidden="true"></i></button>
             <button data-route="category/Video">Video <i class="bi bi-arrow-down-short" aria-hidden="true"></i></button>
+            <button data-scroll-target="community">Community <i class="bi bi-arrow-down-short" aria-hidden="true"></i></button>
+            <button data-scroll-target="contact">Contact <i class="bi bi-arrow-down-short" aria-hidden="true"></i></button>
           </nav>
+          <div class="gnb-tools" aria-label="Site tools">
+            <button class="gnb-tool" id="theme-toggle" data-action="theme" aria-label="Toggle light and dark theme"><i class="bi bi-moon-stars" aria-hidden="true"></i></button>
+            <button class="gnb-tool gnb-admin-tool" data-action="admin-login" id="admin-login-button">Admin</button>
+            <div class="admin-session-tools" id="admin-session-tools" hidden>
+              <button class="gnb-tool notification-tool" data-action="notifications" aria-label="알림 센터">
+                <i class="bi bi-bell" aria-hidden="true"></i><span class="notification-count" id="notification-count" hidden>0</span>
+              </button>
+              <button class="gnb-tool" data-action="settings"><i class="bi bi-gear" aria-hidden="true"></i><span class="visually-hidden">설정</span></button>
+              <button class="gnb-tool" data-action="admin-logout">로그아웃</button>
+            </div>
+          </div>
+          <div class="notification-center" id="notification-center" hidden>
+            <div class="notification-center-heading"><strong>알림 센터</strong><button class="btn-close" data-action="close-notifications" aria-label="알림 닫기" type="button"></button></div>
+            <ol class="notification-list" id="notification-list"><li class="empty-state">알림을 불러오는 중입니다.</li></ol>
+          </div>
         </header>
 
         <main class="page page-content" id="home-page" data-page="home">
@@ -168,6 +186,68 @@
             </div>
           </section>
 
+          <section class="content-section community-section" id="community" aria-labelledby="community-title">
+            <div class="section-heading content-section-heading">
+              <div>
+                <p class="section-label">Community</p>
+                <h2 id="community-title">Updates &amp; Guestbook</h2>
+              </div>
+              <span class="section-note">Portfolio notes and visitor messages</span>
+            </div>
+            <div class="community-grid">
+              <article class="update-panel">
+                <div class="panel-heading"><h3>Update Log</h3><span class="panel-status" id="update-status">Loading</span></div>
+                <ol class="update-list" id="update-list">
+                  <li class="empty-state">업데이트 기록을 불러오는 중입니다.</li>
+                </ol>
+              </article>
+              <article class="guestbook-panel">
+                <div class="panel-heading"><h3>Guestbook</h3><span class="panel-status" id="guestbook-status">Loading</span></div>
+                <form class="guestbook-form" id="guestbook-form">
+                  <div class="form-row">
+                    <label>닉네임<input name="name" maxlength="30" required></label>
+                    <label>비밀번호<input name="password" type="password" minlength="4" maxlength="64" required></label>
+                  </div>
+                  <label>메시지<textarea name="content" rows="4" maxlength="1000" required></textarea></label>
+                  <button class="btn btn-primary rounded-pill" type="submit">남기기 <i class="bi bi-send" aria-hidden="true"></i></button>
+                </form>
+                <ol class="guestbook-list" id="guestbook-list">
+                  <li class="empty-state">방명록을 불러오는 중입니다.</li>
+                </ol>
+              </article>
+            </div>
+          </section>
+
+          <section class="content-section contact-section" id="contact" aria-labelledby="contact-title">
+            <div class="section-heading content-section-heading">
+              <div>
+                <p class="section-label">Contact</p>
+                <h2 id="contact-title">Let&apos;s connect</h2>
+              </div>
+              <span class="section-note">Questions, collaborations, and project conversations</span>
+            </div>
+            <div class="contact-grid">
+              <a class="contact-card" href="mailto:ajas03974@gmail.com">
+                <i class="bi bi-envelope-paper" aria-hidden="true"></i>
+                <span><strong>Email</strong><small>ajas03974@gmail.com</small></span>
+                <i class="bi bi-arrow-up-right" aria-hidden="true"></i>
+              </a>
+              <article class="contact-card contact-chat-card">
+                <i class="bi bi-chat-dots" aria-hidden="true"></i>
+                <span><strong>Direct Message</strong><small>간단한 문의를 남겨주세요.</small></span>
+                <button class="btn btn-sm btn-outline-dark rounded-pill" data-action="open-chat" type="button">Open chat</button>
+              </article>
+            </div>
+            <div class="chat-panel" id="chat-panel" hidden>
+              <div class="chat-panel-heading"><strong>Direct Message</strong><button class="btn-close" data-action="close-chat" aria-label="Close chat" type="button"></button></div>
+              <div class="chat-messages" id="chat-messages" aria-live="polite"><p class="empty-state">안녕하세요! 문의사항을 남겨주세요.</p></div>
+              <form class="chat-form" id="chat-form">
+                <input name="message" maxlength="1000" placeholder="메시지를 입력하세요" required>
+                <button class="btn btn-primary rounded-pill" type="submit" aria-label="Send message"><i class="bi bi-send" aria-hidden="true"></i></button>
+              </form>
+            </div>
+          </section>
+
           <button class="top-button btn" data-action="top">TOP <i class="bi bi-arrow-up" aria-hidden="true"></i></button>
         </main>
 
@@ -223,6 +303,44 @@
         </footer>
       </div>
 
+      <div class="portfolio-modal" id="admin-login-modal" hidden>
+        <div class="portfolio-modal-backdrop" data-action="close-login"></div>
+        <section class="portfolio-modal-content" role="dialog" aria-modal="true" aria-labelledby="admin-login-title">
+          <button class="btn-close" data-action="close-login" aria-label="로그인 창 닫기" type="button"></button>
+          <p class="section-label">Admin</p>
+          <h2 id="admin-login-title">관리자 로그인</h2>
+          <p class="modal-help">관리자 계정으로 로그인하면 설정·백업·알림 기능을 사용할 수 있습니다.</p>
+          <form id="admin-login-form" class="admin-login-form">
+            <label>이메일<input type="email" name="email" autocomplete="username" required></label>
+            <label>비밀번호<input type="password" name="password" autocomplete="current-password" required></label>
+            <button class="btn btn-primary rounded-pill" type="submit">로그인 <i class="bi bi-box-arrow-in-right" aria-hidden="true"></i></button>
+            <p class="form-status" id="admin-login-status" role="status"></p>
+          </form>
+        </section>
+      </div>
+
+      <div class="portfolio-modal" id="settings-modal" hidden>
+        <div class="portfolio-modal-backdrop" data-action="close-settings"></div>
+        <section class="portfolio-modal-content settings-modal-content" role="dialog" aria-modal="true" aria-labelledby="settings-title">
+          <button class="btn-close" data-action="close-settings" aria-label="설정 창 닫기" type="button"></button>
+          <p class="section-label">Admin settings</p>
+          <h2 id="settings-title">설정 및 백업</h2>
+          <div class="settings-section">
+            <div class="settings-section-heading"><div><h3>Google Drive</h3><p id="drive-connection-status">연결 상태를 확인하는 중입니다.</p></div><i class="bi bi-cloud" aria-hidden="true"></i></div>
+            <div class="settings-actions">
+              <button class="btn btn-outline-dark rounded-pill" data-action="drive-connect" type="button">Google Drive 연결</button>
+              <button class="btn btn-outline-danger rounded-pill" data-action="drive-disconnect" type="button">연결 끊기</button>
+            </div>
+          </div>
+          <div class="settings-section">
+            <div class="settings-section-heading"><div><h3>백업</h3><p>자동 백업은 관리자 화면이 열려 있고 브라우저가 활성 상태일 때만 동작합니다.</p></div><i class="bi bi-cloud-arrow-up" aria-hidden="true"></i></div>
+            <button class="btn btn-primary rounded-pill" data-action="backup-now" type="button">지금 수동 백업</button>
+            <p class="form-status" id="backup-status" role="status"></p>
+            <div class="backup-list-heading"><strong>백업 파일</strong><span id="backup-list-status">확인 중</span></div>
+            <ol class="backup-list" id="backup-list"><li class="empty-state">백업 목록을 불러오는 중입니다.</li></ol>
+          </div>
+        </section>
+      </div>
       <div class="loading-layer" id="loading-layer" aria-label="Portfolio loading">
         <section class="loading-screen">
           <div class="loading-lockup">
@@ -239,6 +357,7 @@
         </section>
       </div>
     </div>
+    <script defer src="./config.js"></script>
     <script defer src="./app.js"></script>
   </body>
 </html>
