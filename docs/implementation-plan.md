@@ -498,3 +498,18 @@ Drive 업로드 또는 GitHub 커밋 중 하나가 실패하면 게시물을 pub
 - 눈 버튼 연속 전환 시 입력값 보존
 - X 버튼 클릭/키보드 활성화 시 입력값 삭제
 - 정적 검증과 Secret 패턴 검사 통과
+
+## 18. 2026-08-12 로그인 Failed to fetch 수정
+
+- Worker route의 관리자 로그인 호출은 반드시 `await`하여 route 내부 `try/catch`가 인증·입력·Secret 설정 오류를 JSON 응답으로 변환하도록 한다.
+- 브라우저에는 Cloudflare 1101 원문 대신 안전한 `AUTH_FAILED`, `AUTH_NOT_CONFIGURED`, `FORBIDDEN` 코드와 사용자용 메시지만 전달한다.
+- 로그인 API의 OPTIONS preflight와 POST 오류 응답 모두 GitHub Pages Origin CORS 헤더를 포함해야 한다.
+- 인증정보·Firebase 원문 오류·Secret 값은 로그와 응답에 포함하지 않는다.
+
+### Gate
+
+- 빈 입력: 안전한 401 JSON
+- 가짜 계정: 안전한 401 JSON
+- CSRF 헤더 누락: 안전한 403 JSON
+- 정상 관리자 계정: 세션 쿠키 발급
+- OPTIONS preflight: 204와 CORS 헤더
