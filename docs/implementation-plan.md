@@ -838,3 +838,55 @@ Gate: 모든 CI 성공, 브라우저 console에 미해결 오류 없음, 실제 
 - 세션 키 파서가 약한 임의 문자열을 허용하지 않음
 - Firebase API key·Provider 오류가 서버 500 대신 안전한 503/401 계열 코드로 반환됨
 - Pages와 Worker 배포 후 운영 화면에서 이메일·Google 로그인을 직접 확인
+
+
+## 27. 2026-08-12 인증 무한 대기·Provider 오류 개선 Phase
+
+### 확정 관찰
+
+- 로그인 화면의 `로그인 중…` 상태는 API fetch에 timeout이 없어 Worker 또는 Firebase upstream 지연 시 무기한 유지될 수 있다.
+- Google callback은 Provider·API key·Redirect URI·계정 연결·세션 저장 오류를 세분화하지 못하면 동일한 provider 오류로 표시될 수 있다.
+- `/api/auth/session`의 401은 세션이 없는 초기 상태에서 정상이다.
+- CSP `frame-ancestors` meta 경고와 jsDelivr source map 차단은 인증 API의 직접 원인이 아니다.
+
+### 구현 범위
+
+- 화면 API client에 15초 timeout과 `REQUEST_TIMEOUT` 메시지를 추가한다.
+- 이메일 로그인 중복 제출을 막고 timeout·실패·성공 모든 경로에서 버튼 상태를 복구한다.
+- Worker 외부 Firebase/Google 요청에 10초 timeout을 추가하고 안전한 `AUTH_UPSTREAM_TIMEOUT`으로 변환한다.
+- Firestore 활동 기록은 D1 세션 발급 응답을 막지 않도록 `waitUntil`로 분리한다.
+- Google callback은 Provider 비활성화, API key 설정, upstream timeout, 토큰 검증, 세션 저장 fragment를 구분한다.
+
+### Gate
+
+- 계획 문서 선커밋
+- app.js와 Worker 정적 문법·Secret 패턴 검증 성공
+- timeout 발생 시 화면이 무한 대기하지 않음
+- 인증 성공 시 Firestore 지연이 세션 발급을 막지 않음
+- Google 오류가 안전한 단계별 메시지로 표시됨
+- 실제 계정 로그인은 운영자가 배포 후 화면에서 확인
+
+
+## 28. 2026-08-12 인증 안정화 구현 결과 및 검증 게이트
+
+### 적용 범위
+
+- 화면 계층: `app.js`의 인증 API 요청에 15초 AbortController 타임아웃을 적용하고, 타임아웃·인증 서비스 오류·Provider 비활성화 오류를 사용자 메시지로 구분한다.
+- 처리 계층: 관리자 이메일 로그인 제출 중복 실행을 잠그고 `finally`에서 버튼과 상태를 복구한다. 실패·지연 뒤에도 로그인 화면이 영구적으로 “로그인 중…”에 머물지 않는다.
+- 핵심 규칙 계층: Worker의 이메일·Google 인증 외부 호출에 10초 상한을 적용하고, Google OAuth 교환·Firebase `signInWithIdp` 타임아웃을 전용 hash 결과로 반환한다.
+- 저장·외부 서비스 계층: 인증 성공 응답에 대한 Firebase 활동 기록은 D1 저장을 유지하되 Firestore 기록은 `ctx.waitUntil`로 비동기 처리하여 로그인 응답을 지연시키지 않는다.
+- 의존성·앱 시작 계층: 기존 Firebase Provider/환경변수 검증과 세션 확인 흐름을 유지하며, 신규 공개 비밀값은 추가하지 않는다.
+
+### Phase별 Gate
+
+- Phase A(구현): `app.js`에 `API_TIMEOUT_MS`, `REQUEST_TIMEOUT`, 로그인 잠금·복구가 존재하고 Worker에 `fetchWithTimeout` 및 Google 오류 매핑이 존재해야 한다.
+- Phase B(정적 검증): GitHub Actions의 정적 검사 및 Worker 배포 전 검사가 성공해야 한다.
+- Phase C(운영 검증): Actions의 Worker·Pages 배포가 성공해야 한다. 실제 Firebase 계정 인증은 운영자가 배포 URL에서 이메일/Google 각각 직접 확인한다.
+
+### 실패 시 재수정 Loop
+
+정적 검사 실패 시 해당 커밋을 수정하여 drill Actions를 재실행한다. 인증 제공자 설정·OAuth Redirect URI·Firebase 계정 연결처럼 저장소 외부에서만 확인 가능한 오류가 재현되면 hash 오류 단계와 브라우저 콘솔을 기준으로 운영 설정을 보정한 뒤 동일 검증을 반복한다.
+
+### 보안 및 비밀값
+
+문서와 코드에는 API 키·Client Secret·세션 암호화 키·Firebase 서비스 계정 값을 기록하지 않는다. 해당 값은 GitHub/Cloudflare/Firebase의 비밀 저장소와 운영 설정에서만 관리한다.

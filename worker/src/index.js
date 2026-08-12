@@ -23,21 +23,21 @@ async function route(request, env, ctx, visitorId) {
     if (url.pathname === '/health') return json({ ok: true, service: 'yehyun-portfolio-api' });
     if (url.pathname === '/api/auth/login' && request.method === 'POST') {
       requireCsrfHeader(request);
-      return await loginAdmin(request, env);
+      return await loginAdmin(request, env, ctx);
     }
     if (url.pathname === '/api/auth/guest' && request.method === 'POST') {
       requireCsrfHeader(request);
-      return await createAnonymousSession(request, env);
+      return await createAnonymousSession(request, env, ctx);
     }
     if (url.pathname === '/api/auth/member/login' && request.method === 'POST') {
       requireCsrfHeader(request);
-      return await loginVisitor(request, env);
+      return await loginVisitor(request, env, ctx);
     }
     if (url.pathname === '/api/auth/google/start' && request.method === 'GET') {
       return await startFirebaseGoogleLogin(env);
     }
     if (url.pathname === '/oauth/google/login-callback' && request.method === 'GET') {
-      return await finishFirebaseGoogleLogin(request, env);
+      return await finishFirebaseGoogleLogin(request, env, ctx);
     }
     if (url.pathname === '/api/auth/session' && request.method === 'GET') {
       const claims = await requireAdmin(request, env);
@@ -66,7 +66,7 @@ async function route(request, env, ctx, visitorId) {
         ? listMessages(env, conversationId)
         : createMessage(request, env, conversationId);
     }
-    if (url.pathname === '/api/events' && request.method === 'POST') return recordPublicEvent(request, env, visitorId);
+    if (url.pathname === '/api/events' && request.method === 'POST') return recordPublicEvent(request, env, visitorId, ctx);
     if (url.pathname === '/api/guestbook/' && request.method === 'PATCH') return json({ error: { code: 'NOT_FOUND', message: '방명록을 찾을 수 없습니다.' } }, 404);
     if (url.pathname.startsWith('/api/guestbook/') && url.pathname.endsWith('/replies') && request.method === 'POST') {
       return createGuestbookReply(request, env, url.pathname.split('/')[3]);
@@ -574,7 +574,7 @@ async function finishGoogleDriveOAuth(request, env) {
   const stateRow = await env.DB.prepare('SELECT state, uid, created_at FROM google_oauth_states WHERE state = ?').bind(state).first();
   if (!stateRow || Date.now() - Date.parse(stateRow.created_at) > 10 * 60 * 1000) return oauthRedirect(env, 'admin-drive-expired');
   await env.DB.prepare('DELETE FROM google_oauth_states WHERE state = ?').bind(state).run();
-  const tokenResponse = await fetch('https://oauth2.googleapis.com/token', {
+  const tokenResponse = await fetchWithTimeout('https://oauth2.googleapis.com/token', {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     body: new URLSearchParams({
@@ -688,7 +688,7 @@ async function recordNotification(env, type, title, body, entityId = null) {
     .bind(crypto.randomUUID(), type, title, body, entityId, new Date().toISOString()).run();
 }
 
-async function recordPublicEvent(request, env, visitorId) {
+async function recordPublicEvent(request, env, visitorId, ctx) {
   const body = await request.json().catch(() => ({}));
   const legacyType = ['share', 'reaction'].includes(body.type) ? body.type : '';
   const action = ['post.view', 'content.share', 'content.reaction', 'guestbook.create', 'dm.create'].includes(body.action)
@@ -703,7 +703,7 @@ async function recordPublicEvent(request, env, visitorId) {
     action,
     entityId: cleanText(body.entityId || body.postId, 100),
     metadata: {},
-  });
+  }, ctx);
   if (['content.share', 'content.reaction'].includes(action)) {
     await recordNotification(
       env,
@@ -909,7 +909,7 @@ async function getDriveAccessToken(env) {
   if (!env.GOOGLE_CLIENT_ID || !env.GOOGLE_CLIENT_SECRET || !refreshToken) {
     throw httpError('DRIVE_NOT_CONFIGURED', 'Google Drive 연결 설정이 필요합니다.', 503);
   }
-  const response = await fetch('https://oauth2.googleapis.com/token', {
+  const response = await fetchWithTimeout('https://oauth2.googleapis.com/token', {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     body: new URLSearchParams({
@@ -1000,7 +1000,7 @@ function firebaseAuthErrorCode(payload) {
   return 'AUTH_SERVICE_ERROR';
 }
 
-async function finishFirebaseGoogleLogin(request, env) {
+async function finishFirebaseGoogleLogin(request, env, ctx) {
   const url = new URL(request.url);
   const state = url.searchParams.get('state') || '';
   const code = url.searchParams.get('code') || '';
@@ -1012,23 +1012,30 @@ async function finishFirebaseGoogleLogin(request, env) {
   }
   await env.DB.prepare('DELETE FROM firebase_google_login_states WHERE state = ?').bind(state).run();
 
-  const tokenResponse = await fetch('https://oauth2.googleapis.com/token', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: new URLSearchParams({
-      client_id: env.GOOGLE_CLIENT_ID || '',
-      client_secret: env.GOOGLE_CLIENT_SECRET || '',
-      code,
-      grant_type: 'authorization_code',
-      redirect_uri: env.GOOGLE_LOGIN_REDIRECT_URI || '',
-    }),
-  });
+  let tokenResponse;
+  try {
+    tokenResponse = await fetchWithTimeout('https://oauth2.googleapis.com/token', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({
+        client_id: env.GOOGLE_CLIENT_ID || '',
+        client_secret: env.GOOGLE_CLIENT_SECRET || '',
+        code,
+        grant_type: 'authorization_code',
+        redirect_uri: env.GOOGLE_LOGIN_REDIRECT_URI || '',
+      }),
+    });
+  } catch (error) {
+    return oauthRedirect(env, googleErrorFragment(error.code));
+  }
   if (!tokenResponse.ok) return oauthRedirect(env, 'admin-google-login-oauth-error');
   const googleToken = await tokenResponse.json();
   if (!googleToken.id_token) return oauthRedirect(env, 'admin-google-login-oauth-error');
 
-  const firebaseResponse = await fetch(
-    'https://identitytoolkit.googleapis.com/v1/accounts:signInWithIdp?key=' + encodeURIComponent(env.FIREBASE_WEB_API_KEY || ''),
+  let firebaseResponse;
+  try {
+    firebaseResponse = await fetchWithTimeout(
+      'https://identitytoolkit.googleapis.com/v1/accounts:signInWithIdp?key=' + encodeURIComponent(env.FIREBASE_WEB_API_KEY || ''),
     {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -1040,7 +1047,10 @@ async function finishFirebaseGoogleLogin(request, env) {
         autoCreate: true,
       }),
     },
-  );
+    );
+  } catch (error) {
+    return oauthRedirect(env, googleErrorFragment(error.code));
+  }
   if (!firebaseResponse.ok) {
     const firebaseError = await firebaseResponse.json().catch(() => ({}));
     const reason = String(firebaseError.error?.message || '');
@@ -1065,8 +1075,8 @@ async function finishFirebaseGoogleLogin(request, env) {
     if (claims.sub !== firebasePayload.localId) return oauthRedirect(env, 'admin-google-login-error');
     const isAdministrator = await isAdmin(claims, env);
     const sessionResponse = isAdministrator
-      ? await createAdminSession(firebasePayload, claims.email || firebasePayload.email || '', env, claims)
-      : await createVisitorSession(firebasePayload, claims.email || firebasePayload.email || '', env, 'google', claims);
+      ? await createAdminSession(firebasePayload, claims.email || firebasePayload.email || '', env, claims, ctx)
+      : await createVisitorSession(firebasePayload, claims.email || firebasePayload.email || '', env, 'google', claims, ctx);
     const headers = new Headers(sessionResponse.headers);
     headers.set('Location', (env.FRONTEND_URL || 'https://hwahyo-o.github.io/yehyun_portfolio') + (isAdministrator ? '/#admin-google-login-success' : '/#visitor-google-login-success'));
     return new Response(null, { status: 302, headers });
@@ -1083,11 +1093,14 @@ function googleErrorFragment(code) {
     SECRET_CONFIG_INVALID: 'admin-google-login-secret-error',
     SESSION_STORE_FAILED: 'admin-google-login-session-error',
     FORBIDDEN: 'admin-google-login-forbidden',
+    AUTH_UPSTREAM_TIMEOUT: 'admin-google-login-timeout',
+    AUTH_PROVIDER_DISABLED: 'admin-google-login-provider-disabled',
+    AUTH_TOKEN_VERIFY_FAILED: 'admin-google-login-token-error',
   };
   return fragments[code] || 'admin-google-login-error';
 }
 
-async function loginAdmin(request, env) {
+async function loginAdmin(request, env, ctx) {
   const body = await request.json().catch(() => ({}));
   const email = String(body.email || '').trim();
   const password = String(body.password || '');
@@ -1100,7 +1113,7 @@ async function loginAdmin(request, env) {
 
   let payload;
   try {
-    const response = await fetch('https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=' + encodeURIComponent(env.FIREBASE_WEB_API_KEY), {
+    const response = await fetchWithTimeout('https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=' + encodeURIComponent(env.FIREBASE_WEB_API_KEY), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ email, password, returnSecureToken: true }),
@@ -1134,14 +1147,14 @@ async function loginAdmin(request, env) {
   if (!await isAdmin(claims, env)) throw httpError('FORBIDDEN', '관리자 권한이 등록되지 않은 계정입니다.', 403);
 
   try {
-    return await createAdminSession(payload, email, env, claims);
+    return await createAdminSession(payload, email, env, claims, ctx);
   } catch (error) {
     if (error.code === 'SECRET_CONFIG_INVALID') throw error;
     throw httpError('SESSION_STORE_FAILED', '관리자 세션을 저장할 수 없습니다.', 503);
   }
 }
 
-async function createAnonymousSession(request, env) {
+async function createAnonymousSession(request, env, ctx) {
   if (!env.DB || !env.FIREBASE_WEB_API_KEY || !env.SESSION_ENCRYPTION_KEY) {
     throw httpError('AUTH_NOT_CONFIGURED', '방문자 로그인을 사용할 수 없습니다.', 503);
   }
@@ -1150,7 +1163,7 @@ async function createAnonymousSession(request, env) {
     const existing = await env.DB.prepare('SELECT uid, email, provider FROM visitor_sessions WHERE id = ?').bind(await hashSessionToken(existingToken)).first();
     if (existing) return withVisitorSessionCookie(json({ user: { uid: existing.uid, email: existing.email || null, role: existing.provider === 'anonymous' ? 'guest' : 'member' } }), existingToken);
   }
-  const response = await fetch('https://identitytoolkit.googleapis.com/v1/accounts:signUp?key=' + encodeURIComponent(env.FIREBASE_WEB_API_KEY), {
+  const response = await fetchWithTimeout('https://identitytoolkit.googleapis.com/v1/accounts:signUp?key=' + encodeURIComponent(env.FIREBASE_WEB_API_KEY), {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ returnSecureToken: true }),
@@ -1162,10 +1175,10 @@ async function createAnonymousSession(request, env) {
   }
   const payload = await response.json();
   const claims = await verifyFirebaseToken(payload.idToken, env);
-  return createVisitorSession(payload, '', env, 'anonymous', claims);
+  return createVisitorSession(payload, '', env, 'anonymous', claims, ctx);
 }
 
-async function loginVisitor(request, env) {
+async function loginVisitor(request, env, ctx) {
   const body = await request.json().catch(() => ({}));
   const email = String(body.email || '').trim();
   const password = String(body.password || '');
@@ -1175,7 +1188,7 @@ async function loginVisitor(request, env) {
   if (!env.DB || !env.FIREBASE_WEB_API_KEY || !env.SESSION_ENCRYPTION_KEY) {
     throw httpError('AUTH_NOT_CONFIGURED', '방문자 로그인을 사용할 수 없습니다.', 503);
   }
-  const response = await fetch('https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=' + encodeURIComponent(env.FIREBASE_WEB_API_KEY), {
+  const response = await fetchWithTimeout('https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=' + encodeURIComponent(env.FIREBASE_WEB_API_KEY), {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ email, password, returnSecureToken: true }),
@@ -1185,10 +1198,10 @@ async function loginVisitor(request, env) {
   const claims = await verifyFirebaseToken(payload.idToken, env);
   if (claims.sub !== payload.localId) throw httpError('AUTH_TOKEN_VERIFY_FAILED', '로그인 토큰을 확인할 수 없습니다.', 503);
   if (await isAdmin(claims, env)) throw httpError('ADMIN_LOGIN_REQUIRED', '관리자 로그인 화면을 사용해주세요.', 409);
-  return createVisitorSession(payload, claims.email || email, env, 'password', claims);
+  return createVisitorSession(payload, claims.email || email, env, 'password', claims, ctx);
 }
 
-async function createVisitorSession(payload, email, env, provider, claims = null) {
+async function createVisitorSession(payload, email, env, provider, claims = null, ctx) {
   const resolvedClaims = claims || await verifyFirebaseToken(payload.idToken, env);
   if (resolvedClaims.sub !== payload.localId) throw httpError('AUTH_TOKEN_VERIFY_FAILED', '로그인 토큰을 확인할 수 없습니다.', 503);
   const rawSession = crypto.randomUUID() + crypto.randomUUID();
@@ -1196,7 +1209,7 @@ async function createVisitorSession(payload, email, env, provider, claims = null
   const now = new Date().toISOString();
   await env.DB.prepare('INSERT INTO visitor_sessions (id, uid, email, provider, refresh_token_ciphertext, refresh_token_iv, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
     .bind(await hashSessionToken(rawSession), resolvedClaims.sub, email || null, provider, encrypted.ciphertext, encrypted.iv, now, now).run();
-  await recordActivity(env, { eventId: crypto.randomUUID(), actorId: resolvedClaims.sub, actorType: provider === 'anonymous' ? 'guest' : 'member', action: 'auth.login', metadata: { provider } });
+  await recordActivity(env, { eventId: crypto.randomUUID(), actorId: resolvedClaims.sub, actorType: provider === 'anonymous' ? 'guest' : 'member', action: 'auth.login', metadata: { provider } }, ctx);
   return withVisitorSessionCookie(json({ user: { uid: resolvedClaims.sub, email: email || null, role: provider === 'anonymous' ? 'guest' : 'member' } }), rawSession);
 }
 
@@ -1208,7 +1221,7 @@ async function resolveActivityActor(request, env, visitorId) {
   return { id: row.uid, type: row.provider === 'anonymous' ? 'guest' : 'member' };
 }
 
-async function createAdminSession(payload, email, env, claims = null) {
+async function createAdminSession(payload, email, env, claims = null, ctx) {
   const resolvedClaims = claims || await verifyFirebaseToken(payload.idToken, env);
   if (resolvedClaims.sub !== payload.localId || !await isAdmin(resolvedClaims, env)) {
     throw httpError('FORBIDDEN', '관리자 권한이 등록되지 않은 계정입니다.', 403);
@@ -1219,7 +1232,7 @@ async function createAdminSession(payload, email, env, claims = null) {
     const now = new Date().toISOString();
     await env.DB.prepare('INSERT INTO admin_sessions (id, uid, email, refresh_token_ciphertext, refresh_token_iv, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)')
       .bind(await hashSessionToken(rawSession), resolvedClaims.sub, email, encrypted.ciphertext, encrypted.iv, now, now).run();
-    await recordActivity(env, { eventId: crypto.randomUUID(), actorId: resolvedClaims.sub, actorType: 'admin', action: 'auth.login', metadata: {} });
+    await recordActivity(env, { eventId: crypto.randomUUID(), actorId: resolvedClaims.sub, actorType: 'admin', action: 'auth.login', metadata: {} }, ctx);
     return withCookie(json({ user: { uid: resolvedClaims.sub, email, role: 'admin' } }), rawSession);
   } catch (error) {
     if (error.code === 'SECRET_CONFIG_INVALID') throw error;
@@ -1235,7 +1248,7 @@ async function logoutAdmin(request, env) {
 }
 
 async function refreshFirebaseToken(refreshToken, env) {
-  const response = await fetch('https://securetoken.googleapis.com/v1/token?key=' + encodeURIComponent(env.FIREBASE_WEB_API_KEY), {
+  const response = await fetchWithTimeout('https://securetoken.googleapis.com/v1/token?key=' + encodeURIComponent(env.FIREBASE_WEB_API_KEY), {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     body: new URLSearchParams({ grant_type: 'refresh_token', refresh_token: refreshToken }),
@@ -1355,7 +1368,22 @@ function normalizeEmail(value) {
   return String(value || '').trim().toLowerCase();
 }
 
-async function recordActivity(env, event) {
+async function fetchWithTimeout(resource, options = {}, timeoutMs = 10000) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(resource, { ...options, signal: controller.signal });
+  } catch (error) {
+    if (error.name === 'AbortError') {
+      throw httpError('AUTH_UPSTREAM_TIMEOUT', '인증 서비스 응답 시간이 초과되었습니다.', 504);
+    }
+    throw error;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+async function recordActivity(env, event, ctx) {
   const createdAt = new Date().toISOString();
   const metadata = JSON.stringify(event.metadata || {});
   try {
@@ -1375,11 +1403,11 @@ async function recordActivity(env, event) {
     console.error('activity_ledger_failed', { code: error.code || 'D1_WRITE_FAILED' });
   }
   if (env.FIRESTORE_SERVICE_ACCOUNT_JSON) {
-    try {
-      await writeFirestoreActivity(env, { ...event, createdAt });
-    } catch (error) {
+    const write = writeFirestoreActivity(env, { ...event, createdAt }).catch((error) => {
       console.error('activity_firestore_failed', { code: error.code || 'FIRESTORE_WRITE_FAILED' });
-    }
+    });
+    if (ctx?.waitUntil) ctx.waitUntil(write);
+    else await write;
   }
 }
 
