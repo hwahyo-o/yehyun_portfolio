@@ -1,0 +1,46 @@
+name: Apply D1 migrations
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirmation:
+        description: "Type APPLY_D1 to apply the two schema files to the remote D1 database"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: apply-d1-migrations
+  cancel-in-progress: false
+
+jobs:
+  apply:
+    if: inputs.confirmation == 'APPLY_D1'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check out migration files
+        uses: actions/checkout@v4
+
+      - name: Apply initial schema
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: d1 execute yehyun-portfolio --remote --file=worker/schema/001_initial.sql
+
+      - name: Apply administrator feature schema
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: d1 execute yehyun-portfolio --remote --file=worker/schema/002_admin_backups_notifications.sql
+
+      - name: Verify required tables
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: d1 execute yehyun-portfolio --remote --command="SELECT name FROM sqlite_master WHERE type='table' AND name IN ('posts','admin_roles','backups','admin_notifications') ORDER BY name;"
