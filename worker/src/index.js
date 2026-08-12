@@ -15,12 +15,18 @@ async function route(request, env) {
   const url = new URL(request.url);
   try {
     if (url.pathname === '/health') return json({ ok: true, service: 'yehyun-portfolio-api' });
-    if (url.pathname === '/api/auth/login' && request.method === 'POST') { requireCsrfHeader(request); return loginAdmin(request, env); }
+    if (url.pathname === '/api/auth/login' && request.method === 'POST') {
+      requireCsrfHeader(request);
+      return await loginAdmin(request, env);
+    }
     if (url.pathname === '/api/auth/session' && request.method === 'GET') {
       const claims = await requireAdmin(request, env);
       return json({ user: { uid: claims.sub, email: claims.email || null } });
     }
-    if (url.pathname === '/api/auth/logout' && request.method === 'POST') { requireCsrfHeader(request); return logoutAdmin(request, env); }
+    if (url.pathname === '/api/auth/logout' && request.method === 'POST') {
+      requireCsrfHeader(request);
+      return await logoutAdmin(request, env);
+    }
     if (url.pathname === '/api/admin/drive/start' && request.method === 'GET') return startGoogleDriveOAuth(request, env);
     if (url.pathname === '/oauth/google/callback' && request.method === 'GET') return finishGoogleDriveOAuth(request, env);
     if (url.pathname === '/api/posts' && request.method === 'GET') return listPosts(request, env);
