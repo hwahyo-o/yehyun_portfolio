@@ -600,6 +600,14 @@ async function finishGoogleDriveOAuth(request, env) {
   return oauthRedirect(env, 'admin-drive-connected');
 }
 
+function firebaseRequestUri(env) {
+  try {
+    return new URL(env.FRONTEND_URL || 'https://hwahyo-o.github.io/yehyun_portfolio').origin;
+  } catch {
+    return 'https://hwahyo-o.github.io';
+  }
+}
+
 function oauthRedirect(env, status) {
   const origin = env.FRONTEND_URL || 'https://hwahyo-o.github.io/yehyun_portfolio';
   return new Response(null, { status: 302, headers: { Location: `${origin}/#${status}` } });
@@ -1010,7 +1018,7 @@ async function finishFirebaseGoogleLogin(request, env) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         postBody: new URLSearchParams({ id_token: googleToken.id_token, providerId: 'google.com' }).toString(),
-        requestUri: env.FRONTEND_URL || 'https://hwahyo-o.github.io/yehyun_portfolio',
+        requestUri: firebaseRequestUri(env),
         returnSecureToken: true,
         returnIdpCredential: false,
         autoCreate: true,
@@ -1258,10 +1266,16 @@ async function optionalAdmin(request, env) {
 }
 
 async function verifyFirebaseToken(token, env) {
-  const parts = token.split('.');
+  const parts = String(token || '').split('.');
   if (parts.length !== 3) throw httpError('INVALID_TOKEN', '인증 토큰이 올바르지 않습니다.', 401);
-  const header = JSON.parse(decode(parts[0]));
-  const claims = JSON.parse(decode(parts[1]));
+  let header;
+  let claims;
+  try {
+    header = JSON.parse(decode(parts[0]));
+    claims = JSON.parse(decode(parts[1]));
+  } catch {
+    throw httpError('INVALID_TOKEN', '인증 토큰이 올바르지 않습니다.', 401);
+  }
   const now = Math.floor(Date.now() / 1000);
   if (header.alg !== 'RS256' || !header.kid) {
     throw httpError('INVALID_TOKEN', '인증 토큰 알고리즘이 올바르지 않습니다.', 401);
