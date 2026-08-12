@@ -923,9 +923,10 @@ async function isAdmin(uid, env) {
 }
 
 async function startFirebaseGoogleLogin(env) {
-  if (!env.GOOGLE_CLIENT_ID || !env.GOOGLE_LOGIN_REDIRECT_URI || !env.FIREBASE_WEB_API_KEY) {
+  if (!env.GOOGLE_CLIENT_ID || !env.GOOGLE_CLIENT_SECRET || !env.GOOGLE_LOGIN_REDIRECT_URI || !env.FIREBASE_WEB_API_KEY) {
     throw httpError('GOOGLE_LOGIN_NOT_CONFIGURED', 'Google 로그인 설정이 필요합니다.', 503);
   }
+  await env.DB.prepare('DELETE FROM firebase_google_login_states WHERE created_at < ?').bind(new Date(Date.now() - 10 * 60 * 1000).toISOString()).run();
   const state = crypto.randomUUID();
   await env.DB.prepare('INSERT INTO firebase_google_login_states (state, created_at) VALUES (?, ?)')
     .bind(state, new Date().toISOString()).run();
@@ -981,10 +982,18 @@ async function finishFirebaseGoogleLogin(request, env) {
         requestUri: env.FRONTEND_URL || 'https://hwahyo-o.github.io/yehyun_portfolio',
         returnSecureToken: true,
         returnIdpCredential: false,
+        autoCreate: true,
       }),
     },
   );
-  if (!firebaseResponse.ok) return oauthRedirect(env, 'admin-google-login-error');
+  if (!firebaseResponse.ok) {
+    const firebaseError = await firebaseResponse.json().catch(() => ({}));
+    const reason = String(firebaseError.error?.message || '');
+    if (reason.includes('EMAIL_EXISTS') || reason.includes('FEDERATED_USER_ID_ALREADY_LINKED')) {
+      return oauthRedirect(env, 'admin-google-login-link-required');
+    }
+    return oauthRedirect(env, 'admin-google-login-error');
+  }
   const firebasePayload = await firebaseResponse.json();
   if (!firebasePayload.idToken || !firebasePayload.refreshToken || !firebasePayload.localId) {
     return oauthRedirect(env, 'admin-google-login-error');
