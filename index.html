@@ -27,7 +27,18 @@
           </nav>
           <div class="gnb-tools" aria-label="Site tools">
             <button class="gnb-tool" id="theme-toggle" data-action="theme" aria-label="Toggle light and dark theme"><i class="bi bi-moon-stars" aria-hidden="true"></i></button>
-            <button class="gnb-tool gnb-admin-tool" data-action="admin-login">Admin</button>
+            <button class="gnb-tool gnb-admin-tool" data-action="admin-login" id="admin-login-button">Admin</button>
+            <div class="admin-session-tools" id="admin-session-tools" hidden>
+              <button class="gnb-tool notification-tool" data-action="notifications" aria-label="알림 센터">
+                <i class="bi bi-bell" aria-hidden="true"></i><span class="notification-count" id="notification-count" hidden>0</span>
+              </button>
+              <button class="gnb-tool" data-action="settings"><i class="bi bi-gear" aria-hidden="true"></i><span class="visually-hidden">설정</span></button>
+              <button class="gnb-tool" data-action="admin-logout">로그아웃</button>
+            </div>
+          </div>
+          <div class="notification-center" id="notification-center" hidden>
+            <div class="notification-center-heading"><strong>알림 센터</strong><button class="btn-close" data-action="close-notifications" aria-label="알림 닫기" type="button"></button></div>
+            <ol class="notification-list" id="notification-list"><li class="empty-state">알림을 불러오는 중입니다.</li></ol>
           </div>
         </header>
 
@@ -291,6 +302,44 @@
         </footer>
       </div>
 
+      <div class="portfolio-modal" id="admin-login-modal" hidden>
+        <div class="portfolio-modal-backdrop" data-action="close-login"></div>
+        <section class="portfolio-modal-content" role="dialog" aria-modal="true" aria-labelledby="admin-login-title">
+          <button class="btn-close" data-action="close-login" aria-label="로그인 창 닫기" type="button"></button>
+          <p class="section-label">Admin</p>
+          <h2 id="admin-login-title">관리자 로그인</h2>
+          <p class="modal-help">관리자 계정으로 로그인하면 설정·백업·알림 기능을 사용할 수 있습니다.</p>
+          <form id="admin-login-form" class="admin-login-form">
+            <label>이메일<input type="email" name="email" autocomplete="username" required></label>
+            <label>비밀번호<input type="password" name="password" autocomplete="current-password" required></label>
+            <button class="btn btn-primary rounded-pill" type="submit">로그인 <i class="bi bi-box-arrow-in-right" aria-hidden="true"></i></button>
+            <p class="form-status" id="admin-login-status" role="status"></p>
+          </form>
+        </section>
+      </div>
+
+      <div class="portfolio-modal" id="settings-modal" hidden>
+        <div class="portfolio-modal-backdrop" data-action="close-settings"></div>
+        <section class="portfolio-modal-content settings-modal-content" role="dialog" aria-modal="true" aria-labelledby="settings-title">
+          <button class="btn-close" data-action="close-settings" aria-label="설정 창 닫기" type="button"></button>
+          <p class="section-label">Admin settings</p>
+          <h2 id="settings-title">설정 및 백업</h2>
+          <div class="settings-section">
+            <div class="settings-section-heading"><div><h3>Google Drive</h3><p id="drive-connection-status">연결 상태를 확인하는 중입니다.</p></div><i class="bi bi-cloud" aria-hidden="true"></i></div>
+            <div class="settings-actions">
+              <button class="btn btn-outline-dark rounded-pill" data-action="drive-connect" type="button">Google Drive 연결</button>
+              <button class="btn btn-outline-danger rounded-pill" data-action="drive-disconnect" type="button">연결 끊기</button>
+            </div>
+          </div>
+          <div class="settings-section">
+            <div class="settings-section-heading"><div><h3>백업</h3><p>자동 백업은 관리자 화면이 열려 있고 브라우저가 활성 상태일 때만 동작합니다.</p></div><i class="bi bi-cloud-arrow-up" aria-hidden="true"></i></div>
+            <button class="btn btn-primary rounded-pill" data-action="backup-now" type="button">지금 수동 백업</button>
+            <p class="form-status" id="backup-status" role="status"></p>
+            <div class="backup-list-heading"><strong>백업 파일</strong><span id="backup-list-status">확인 중</span></div>
+            <ol class="backup-list" id="backup-list"><li class="empty-state">백업 목록을 불러오는 중입니다.</li></ol>
+          </div>
+        </section>
+      </div>
       <div class="loading-layer" id="loading-layer" aria-label="Portfolio loading">
         <section class="loading-screen">
           <div class="loading-lockup">
@@ -307,6 +356,8 @@
         </section>
       </div>
     </div>
+    <script defer src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+    <script defer src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
     <script defer src="./config.js"></script>
     <script defer src="./app.js"></script>
   </body>
