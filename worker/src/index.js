@@ -15,12 +15,12 @@ async function route(request, env) {
   const url = new URL(request.url);
   try {
     if (url.pathname === '/health') return json({ ok: true, service: 'yehyun-portfolio-api' });
-    if (url.pathname === '/api/auth/login' && request.method === 'POST') return loginAdmin(request, env);
+    if (url.pathname === '/api/auth/login' && request.method === 'POST') { requireCsrfHeader(request); return loginAdmin(request, env); }
     if (url.pathname === '/api/auth/session' && request.method === 'GET') {
       const claims = await requireAdmin(request, env);
       return json({ user: { uid: claims.sub, email: claims.email || null } });
     }
-    if (url.pathname === '/api/auth/logout' && request.method === 'POST') return logoutAdmin(request, env);
+    if (url.pathname === '/api/auth/logout' && request.method === 'POST') { requireCsrfHeader(request); return logoutAdmin(request, env); }
     if (url.pathname === '/api/admin/drive/start' && request.method === 'GET') return startGoogleDriveOAuth(request, env);
     if (url.pathname === '/oauth/google/callback' && request.method === 'GET') return finishGoogleDriveOAuth(request, env);
     if (url.pathname === '/api/posts' && request.method === 'GET') return listPosts(request, env);
@@ -547,9 +547,16 @@ async function getDriveAccessToken(env) {
   return payload.access_token;
 }
 
+function requireCsrfHeader(request) {
+  if (request.headers.get('X-Portfolio-Request') !== 'portfolio-app') {
+    throw httpError('CSRF_BLOCKED', '허용되지 않은 요청입니다.', 403);
+  }
+}
+
 async function requireAdmin(request, env) {
   const sessionToken = readCookie(request, 'portfolio_admin_session');
   if (sessionToken) {
+    requireCsrfHeader(request);
     const sessionId = await hashSessionToken(sessionToken);
     const row = await env.DB.prepare('SELECT id, uid, email, refresh_token_ciphertext, refresh_token_iv FROM admin_sessions WHERE id = ?').bind(sessionId).first();
     if (!row) throw httpError('AUTH_REQUIRED', '관리자 로그인이 필요합니다.', 401);
@@ -767,7 +774,7 @@ function withCors(response, origin, env) {
     headers.set('Access-Control-Allow-Credentials', 'true');
     headers.set('Vary', 'Origin');
   }
-  headers.set('Access-Control-Allow-Headers', 'Content-Type, Range');
+  headers.set('Access-Control-Allow-Headers', 'Content-Type, Range, X-Portfolio-Request');
   headers.set('Access-Control-Allow-Methods', 'GET, POST, PATCH, DELETE, OPTIONS');
   return new Response(response.body, { status: response.status, headers });
 }
