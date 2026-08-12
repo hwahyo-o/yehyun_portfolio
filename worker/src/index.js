@@ -926,20 +926,49 @@ async function loginAdmin(request, env) {
   if (!env.FIREBASE_WEB_API_KEY || !env.SESSION_ENCRYPTION_KEY) {
     throw httpError('AUTH_NOT_CONFIGURED', '관리자 로그인을 사용할 수 없습니다.', 503);
   }
-  const response = await fetch('https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=' + encodeURIComponent(env.FIREBASE_WEB_API_KEY), {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ email, password, returnSecureToken: true }),
-  });
-  if (!response.ok) throw httpError('AUTH_FAILED', '이메일 또는 비밀번호를 확인해주세요.', 401);
-  const payload = await response.json();
-  const claims = await verifyFirebaseToken(payload.idToken, env);
-  if (!await isAdmin(claims.sub, env)) throw httpError('FORBIDDEN', '관리자 권한이 없습니다.', 403);
-  const rawSession = crypto.randomUUID() + crypto.randomUUID();
-  const encrypted = await encryptSecret(payload.refreshToken, env.SESSION_ENCRYPTION_KEY);
-  await env.DB.prepare('INSERT INTO admin_sessions (id, uid, email, refresh_token_ciphertext, refresh_token_iv, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)')
-    .bind(await hashSessionToken(rawSession), claims.sub, email, encrypted.ciphertext, encrypted.iv, new Date().toISOString(), new Date().toISOString()).run();
-  return withCookie(json({ user: { uid: claims.sub, email } }), rawSession);
+
+  let payload;
+  try {
+    const response = await fetch('https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=' + encodeURIComponent(env.FIREBASE_WEB_API_KEY), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, password, returnSecureToken: true }),
+    });
+    if (!response.ok) throw httpError('AUTH_FAILED', '이메일 또는 비밀번호를 확인해주세요.', 401);
+    payload = await response.json();
+  } catch (error) {
+    if (error.code) throw error;
+    throw httpError('AUTH_SERVICE_ERROR', 'Firebase 로그인 서비스를 확인할 수 없습니다.', 503);
+  }
+
+  if (!payload?.idToken || !payload?.refreshToken || !payload?.localId) {
+    throw httpError('AUTH_SERVICE_ERROR', 'Firebase 로그인 응답을 확인할 수 없습니다.', 503);
+  }
+
+  let claims;
+  try {
+    claims = await verifyFirebaseToken(payload.idToken, env);
+  } catch (error) {
+    if (error.code === 'FORBIDDEN') throw error;
+    if (error.code === 'INVALID_TOKEN') throw httpError('AUTH_TOKEN_VERIFY_FAILED', '로그인 토큰을 확인할 수 없습니다.', 503);
+    throw error;
+  }
+  if (claims.sub !== payload.localId) {
+    throw httpError('AUTH_TOKEN_VERIFY_FAILED', '로그인 토큰을 확인할 수 없습니다.', 503);
+  }
+  if (!await isAdmin(claims.sub, env)) throw httpError('FORBIDDEN', '관리자 권한이 등록되지 않은 계정입니다.', 403);
+
+  try {
+    const rawSession = crypto.randomUUID() + crypto.randomUUID();
+    const encrypted = await encryptSecret(payload.refreshToken, env.SESSION_ENCRYPTION_KEY);
+    const now = new Date().toISOString();
+    await env.DB.prepare('INSERT INTO admin_sessions (id, uid, email, refresh_token_ciphertext, refresh_token_iv, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)')
+      .bind(await hashSessionToken(rawSession), claims.sub, email, encrypted.ciphertext, encrypted.iv, now, now).run();
+    return withCookie(json({ user: { uid: claims.sub, email } }), rawSession);
+  } catch (error) {
+    if (error.code === 'SECRET_CONFIG_INVALID') throw error;
+    throw httpError('SESSION_STORE_FAILED', '관리자 세션을 저장할 수 없습니다.', 503);
+  }
 }
 
 async function logoutAdmin(request, env) {
