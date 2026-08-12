@@ -43,6 +43,28 @@ The media endpoint checks D1 visibility before requesting the private Drive file
 The repository code can be reviewed without credentials. Live deployment requires the repository owner to create the D1 database, create the Worker, configure Google OAuth redirect URIs, and enter secrets in Cloudflare. Those values must be entered in the provider consoles, not sent in chat.
 
 
+## GitHub Actions D1 migration
+
+The repository includes .github/workflows/apply-d1-migrations.yml. It is manual-only, so a normal GitHub commit does not change the production database.
+
+Before running it:
+
+1. In Cloudflare, create an API Token with Account -> D1 -> Edit permission. D1 writes require D1:Edit.
+2. Copy the Cloudflare Account ID from the dashboard.
+3. In GitHub, open Settings -> Secrets and variables -> Actions.
+4. Add these repository secrets:
+   - CLOUDFLARE_API_TOKEN: the Cloudflare API token.
+   - CLOUDFLARE_ACCOUNT_ID: the Cloudflare account ID.
+5. Open the repository Actions tab.
+6. Select Apply D1 migrations.
+7. Select the drill branch and choose Run workflow.
+8. In the confirmation field, enter exactly APPLY_D1.
+9. Confirm that the workflow completes all three steps: initial schema, administrator feature schema, and required-table verification.
+
+The workflow applies the two SQL files to the remote database through Wrangler. It does not register an administrator account. Run it once for an empty database. Do not run it again after migration 002 has succeeded because its ALTER TABLE statements are intentionally not repeatable.
+
+If the workflow fails, do not register admin_roles. Read the failed step output and report the step name and error text without sharing the API token.
+
 ## D1 migration and administrator setup
 
 The `admin_roles` table is created by `schema/001_initial.sql`. If the D1 Console says `no such table: admin_roles`, the migration has not been applied yet. The table may exist before the final registration step; leave it empty until the implementation and deployment gates pass.
