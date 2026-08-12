@@ -277,15 +277,25 @@ function oauthRedirect(env, status) {
   return new Response(null, { status: 302, headers: { Location: `${origin}/#${status}` } });
 }
 
+function encryptionKeyBytes(encodedKey) {
+  try {
+    const bytes = decodeBytes(String(encodedKey || ''));
+    if (bytes.length !== 32) throw new Error('invalid key length');
+    return bytes;
+  } catch {
+    throw httpError('SECRET_CONFIG_INVALID', '서버 보안 설정이 올바르지 않습니다.', 503);
+  }
+}
+
 async function encryptSecret(value, encodedKey) {
-  const key = await crypto.subtle.importKey('raw', decodeBytes(encodedKey), 'AES-GCM', false, ['encrypt']);
+  const key = await crypto.subtle.importKey('raw', encryptionKeyBytes(encodedKey), 'AES-GCM', false, ['encrypt']);
   const iv = crypto.getRandomValues(new Uint8Array(12));
   const ciphertext = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, key, new TextEncoder().encode(value));
   return { ciphertext: encode(new Uint8Array(ciphertext)), iv: encode(iv) };
 }
 
 async function decryptSecret(ciphertext, iv, encodedKey) {
-  const key = await crypto.subtle.importKey('raw', decodeBytes(encodedKey), 'AES-GCM', false, ['decrypt']);
+  const key = await crypto.subtle.importKey('raw', encryptionKeyBytes(encodedKey), 'AES-GCM', false, ['decrypt']);
   const plaintext = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: decodeBytes(iv) }, key, decodeBytes(ciphertext));
   return new TextDecoder().decode(plaintext);
 }
