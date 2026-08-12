@@ -1146,6 +1146,7 @@ async function createVisitorSession(payload, email, env, provider, claims = null
   const now = new Date().toISOString();
   await env.DB.prepare('INSERT INTO visitor_sessions (id, uid, email, provider, refresh_token_ciphertext, refresh_token_iv, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
     .bind(await hashSessionToken(rawSession), resolvedClaims.sub, email || null, provider, encrypted.ciphertext, encrypted.iv, now, now).run();
+  await recordActivity(env, { eventId: crypto.randomUUID(), actorId: resolvedClaims.sub, actorType: provider === 'anonymous' ? 'guest' : 'member', action: 'auth.login', metadata: { provider } });
   return withVisitorSessionCookie(json({ user: { uid: resolvedClaims.sub, email: email || null, role: provider === 'anonymous' ? 'guest' : 'member' } }), rawSession);
 }
 
@@ -1168,7 +1169,8 @@ async function createAdminSession(payload, email, env, claims = null) {
     const now = new Date().toISOString();
     await env.DB.prepare('INSERT INTO admin_sessions (id, uid, email, refresh_token_ciphertext, refresh_token_iv, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)')
       .bind(await hashSessionToken(rawSession), resolvedClaims.sub, email, encrypted.ciphertext, encrypted.iv, now, now).run();
-    return withCookie(json({ user: { uid: resolvedClaims.sub, email } }), rawSession);
+    await recordActivity(env, { eventId: crypto.randomUUID(), actorId: resolvedClaims.sub, actorType: 'admin', action: 'auth.login', metadata: {} });
+    return withCookie(json({ user: { uid: resolvedClaims.sub, email, role: 'admin' } }), rawSession);
   } catch (error) {
     if (error.code === 'SECRET_CONFIG_INVALID') throw error;
     throw httpError('SESSION_STORE_FAILED', '관리자 세션을 저장할 수 없습니다.', 503);
