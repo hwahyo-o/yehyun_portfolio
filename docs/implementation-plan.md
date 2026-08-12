@@ -361,3 +361,48 @@ Gate: CI, HTTP, 브라우저 결과를 각각 분리 기록하고 모두 필요�
 - GitHub Actions에는 D1 작업용 CLOUDFLARE_API_TOKEN, CLOUDFLARE_ACCOUNT_ID만 저장한다.
 - 기존 Git 이력에 탐지된 Firebase 키는 코드에서 제거했지만, 실제 폐기·교체와 GitHub Secret Scanning 경고 종료는 사용자가 Google Cloud/GitHub에서 수행해야 한다.
 - 관리자 등록은 여전히 최종 배포·검증 Gate 이후로 보류한다.
+
+## 14. 2026-08-12 D1 완료 후 진행 기준
+
+### 완료된 운영 Gate
+
+- GitHub Actions `Apply D1 migrations` run #3 성공
+- `001_initial.sql`, `002_admin_backups_notifications.sql`, `003_admin_sessions.sql` 순서 적용 성공
+- 필수 테이블 검증 성공: `posts`, `admin_roles`, `backups`, `admin_notifications`, `admin_sessions`
+- GitHub Pages main 배포 성공
+- D1 Worker binding은 Cloudflare에서 완료된 것으로 확인
+
+### 다음 우선순위
+
+1. Worker 배포 workflow를 추가한다.
+2. Worker `/health`, 인증, CORS, D1 연결을 실제 URL에서 검증한다.
+3. Google OAuth Redirect URI와 Drive 연결을 실제 환경에서 검증한다.
+4. Worker 검증이 끝난 뒤 D1 `admin_roles`에 관리자 UID를 비공개로 등록한다.
+5. 관리자 CMS와 GitHub `Content/**` 업로드를 구현한다.
+6. Google Drive `Portfolio-con/YYYY-MM-DD/게시물 slug/` 원본 백업과 미디어 프록시를 통합한다.
+7. DM 관리자 답변, Guestbook 대댓글, share/reaction, 휴지통 만료 알림을 통합한다.
+8. CI·HTTP·브라우저 검증을 분리 기록하고 최종 배포한다.
+
+### Worker 배포 보안 규칙
+
+- `CLOUDFLARE_API_TOKEN`과 `CLOUDFLARE_ACCOUNT_ID`는 GitHub Actions Secret으로만 사용한다.
+- Firebase Web API Key, Google OAuth Secret, refresh token, 암호화 키는 Worker Secret으로만 사용한다.
+- Worker 설정 파일에는 공개 가능한 프로젝트 식별자와 D1 binding만 기록한다.
+- workflow는 Worker 경로만 배포하며 정적 Pages 파일이나 `Content/**`를 변경하지 않는다.
+- workflow 로그에 Secret 값을 출력하거나 검증용 echo를 추가하지 않는다.
+
+### 이번 Phase Gate
+
+- 계획 문서가 구현 커밋보다 먼저 갱신되어야 한다.
+- Worker 배포 workflow에 Secret 값이 직접 포함되지 않아야 한다.
+- `node --check worker/src/index.js`와 기존 정적 검증이 통과해야 한다.
+- PR 검증 성공 후에만 main 병합한다.
+- Worker 실제 URL의 `/health` 응답과 관리자 인증 실패 경계를 확인하기 전에는 admin role을 등록하지 않는다.
+
+### 실패 시 Loop
+
+- Account/API 인증 실패: GitHub Secret 이름·계정 범위·D1 Edit 권한만 재확인한다.
+- Wrangler/설정 실패: workflow working directory와 비밀 없는 `wrangler.toml`만 수정한다.
+- Worker 런타임 실패: 해당 API 경계만 수정하고 Pages 화면을 임의로 변경하지 않는다.
+- Drive OAuth 실패: Redirect URI·OAuth secret·refresh token 저장 흐름만 수정한다.
+- 각 수정 후 동일 Gate를 재실행하며 Secret 값은 로그와 문서에 남기지 않는다.
