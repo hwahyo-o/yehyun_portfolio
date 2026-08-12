@@ -1346,3 +1346,24 @@ body[data-theme="dark"] .admin-login-form input {
 .guestbook-replies li + li {
   margin-top: 0.6rem;
 }
+
+.admin-login-divider {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  color: var(--muted);
+  font-size: .74rem;
+  text-align: center;
+}
+.admin-login-divider::before,
+.admin-login-divider::after {
+  content: '';
+  flex: 1;
+  border-top: 1px solid var(--portfolio-border);
+}
+.admin-google-login {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}

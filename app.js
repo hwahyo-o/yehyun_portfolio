@@ -564,6 +564,21 @@ function bindAdminPasswordActions() {
   });
 }
 
+function handleGoogleLoginCallback() {
+  const result = window.location.hash.slice(1);
+  const messages = {
+    'admin-google-login-success': 'Google 로그인에 성공했습니다.',
+    'admin-google-login-forbidden': 'Google 계정이 관리자 권한으로 등록되지 않았습니다.',
+    'admin-google-login-expired': 'Google 로그인 요청이 만료되었습니다. 다시 시도해주세요.',
+    'admin-google-login-link-required': '기존 Firebase 이메일 계정과 Google 계정 연결이 필요합니다. 먼저 이메일 로그인 계정에 Google 제공자를 연결해주세요.',
+    'admin-google-login-error': 'Google 로그인에 실패했습니다. 설정을 확인해주세요.',
+  };
+  if (!messages[result]) return;
+  adminLoginStatus.textContent = messages[result];
+  if (result !== 'admin-google-login-success') openModal(adminLoginModal);
+  window.history.replaceState(null, '', window.location.pathname + window.location.search);
+}
+
 function bindAdminActions() {
   adminPostForm?.addEventListener('submit', async (event) => {
     event.preventDefault();
@@ -673,6 +688,14 @@ document.addEventListener('click', (event) => {
     window.clearInterval(state.chatTimer);
   }
   if (action === 'admin-login') openModal(adminLoginModal);
+  if (action === 'admin-google-login') {
+    if (!apiBase) {
+      adminLoginStatus.textContent = '로그인 서버가 설정되지 않았습니다.';
+    } else {
+      adminLoginStatus.textContent = 'Google 로그인으로 이동 중…';
+      window.location.assign(apiBase + '/api/auth/google/start');
+    }
+  }
   if (action === 'close-login') closeModal(adminLoginModal);
   if (action === 'settings') {
     openModal(settingsModal);
@@ -739,6 +762,7 @@ window.addEventListener('load', resetScroll);
 
 updatePage();
 initTheme();
+handleGoogleLoginCallback();
 bindNameShuffle();
 bindCommunityActions();
 bindAdminPasswordActions();

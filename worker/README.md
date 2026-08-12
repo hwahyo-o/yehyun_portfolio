@@ -17,7 +17,7 @@ The Worker is not copied into the GitHub Pages artifact.
 1. Create a Cloudflare D1 database.
 2. Copy `wrangler.toml.example` to a local, ignored Wrangler configuration.
 3. Set the real D1 database ID locally.
-4. Apply `schema/001_initial.sql`, then `schema/002_admin_backups_notifications.sql`.
+4. Apply the required D1 migrations in order: schema/001_initial.sql, schema/002_admin_backups_notifications.sql, schema/003_session_security.sql, then schema/004_firebase_google_login.sql.
 5. Set the Google OAuth client ID, client secret, and refresh token as Worker secrets.
 6. Deploy the Worker and complete the static/API verification gates.
 7. Set the public Worker URL in a non-secret static configuration value only after the URL exists.
@@ -170,3 +170,39 @@ For an existing database that already has `001_initial.sql`, apply only `002_adm
 - GitHub Actions uses only the D1 token, Worker deploy token, and account ID; all Firebase, Google OAuth, refresh-token, and encryption values remain Cloudflare Worker Secrets.
 
 Before the first production Worker verification, confirm the Cloudflare Worker Secrets and Google OAuth redirect URI in the provider consoles. Never add those values to the repository.
+
+## Firebase Google Provider administrator login
+
+The administrator modal offers two independent entry methods:
+
+- Email/password: the Worker calls Firebase Authentication REST accounts:signInWithPassword.
+- Google: the Worker starts Google OAuth, exchanges the authorization code server-side, then calls Firebase Authentication REST accounts:signInWithIdp with the Google ID token.
+
+Both paths verify the Firebase ID token and check the UID against the private D1 admin_roles table before creating the same HttpOnly administrator session. The browser never receives the Firebase Web API key, Google client secret, OAuth code, refresh token, or encryption keys.
+
+Before testing Google login, the repository owner must complete these provider-console steps:
+
+1. In Firebase Console -> Authentication -> Sign-in method, enable the Google provider and choose the support email.
+2. In Google Cloud Console -> APIs & Services -> Credentials, keep the existing OAuth Web Client and add this authorized redirect URI:
+   https://yehyun-portfolio-api.ajas03974.workers.dev/oauth/google/login-callback
+3. Keep the existing Drive callback URI as well:
+   https://yehyun-portfolio-api.ajas03974.workers.dev/oauth/google/callback
+4. Confirm hwahyo-o.github.io is an authorized domain in Firebase Authentication.
+5. Apply schema/004_firebase_google_login.sql once through the Apply Firebase Google login migration GitHub Actions workflow after the PR is merged to main.
+6. Verify that the Google account's Firebase UID is present in D1 admin_roles. Never place that UID, email, OAuth secret, or password in this repository.
+
+If the existing email/password Firebase user and the Google identity are not linked to the same Firebase UID, Firebase may require account linking or may create a separate Google user. In that case, sign in with the existing email/password account first and link the Google provider to that Firebase user in Firebase Authentication before registering or using the Google-login UID. A Google account that is not present in admin_roles is denied even when its Firebase sign-in succeeds.
+
+The callback state is one-time, stored in D1, and expires after ten minutes. Failed, expired, or non-admin Google sign-ins return to the static site with a generic status message; provider secrets and upstream error payloads are not exposed.
+
+## Firebase Google login migration workflow
+
+After the PR is merged into main:
+
+1. Open GitHub -> Actions -> Apply Firebase Google login migration.
+2. Click Run workflow.
+3. Select branch main.
+4. Enter exactly APPLY_FIREBASE_GOOGLE_LOGIN in the confirmation field.
+5. Run it once and confirm the table verification step succeeds.
+
+This migration is separate from the existing D1 migration workflow and should not be repeated after success.

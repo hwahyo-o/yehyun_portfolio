@@ -1,0 +1,41 @@
+name: Apply Firebase Google login migration
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirmation:
+        description: "Type APPLY_FIREBASE_GOOGLE_LOGIN to apply the Google login state table"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: apply-firebase-google-login-migration
+  cancel-in-progress: false
+
+jobs:
+  apply:
+    if: inputs.confirmation == 'APPLY_FIREBASE_GOOGLE_LOGIN'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check out migration files
+        uses: actions/checkout@v4
+
+      - name: Apply Firebase Google login schema
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          wranglerVersion: "4.121.0"
+          command: d1 execute yehyun-portfolio --remote --file=worker/schema/004_firebase_google_login.sql
+
+      - name: Verify Firebase Google login table
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          wranglerVersion: "4.121.0"
+          command: d1 execute yehyun-portfolio --remote --command="SELECT name FROM sqlite_master WHERE type='table' AND name='firebase_google_login_states';"

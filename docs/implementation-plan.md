@@ -531,3 +531,44 @@ Drive 업로드 또는 GitHub 커밋 중 하나가 실패하면 게시물을 pub
 - 관리자 UID 미등록: 403 `FORBIDDEN`
 - 세션 저장 실패: 503 `SESSION_STORE_FAILED`
 - 성공 로그인: HttpOnly Secure 세션 쿠키와 200 응답
+
+## 20. 2026-08-12 Firebase Google Provider 관리자 로그인
+
+### 관리자 인증 방식
+
+관리자 로그인 화면은 두 가지 방식을 제공한다.
+
+1. Firebase Authentication 이메일·비밀번호
+2. Firebase Authentication Google Provider
+
+두 방식 모두 Worker에서 Firebase 인증 결과를 검증하고 D1 `admin_roles`를 확인한 뒤 동일한 HttpOnly Secure 세션을 발급한다. Google Drive 연결 OAuth는 관리자 로그인과 별도의 설정 기능이다.
+
+### Google 로그인 처리
+
+1. 로그인 화면에서 Google 로그인 선택
+2. Worker가 일회용 state를 D1에 저장
+3. Google OAuth authorization code 발급
+4. Worker가 Google code를 token으로 교환
+5. Worker가 Firebase `accounts:signInWithIdp`에 Google ID token 전달
+6. Firebase ID token·UID·관리자 role 검증
+7. 기존 관리자 세션 생성
+8. GitHub Pages로 redirect
+
+Google 로그인 state는 10분 후 만료되고 callback에서 즉시 삭제한다. Google OAuth Secret, code, access token, Firebase ID token은 브라우저 응답이나 저장소에 기록하지 않는다.
+
+### 외부 설정 Gate
+
+- Firebase Authentication → Sign-in providers → Google 활성화
+- Google Cloud OAuth Web Client에 다음 Redirect URI 추가:
+  `https://yehyun-portfolio-api.ajas03974.workers.dev/oauth/google/login-callback`
+- 기존 Drive callback `/oauth/google/callback`은 유지
+- Firebase Authentication authorized domain에 GitHub Pages 도메인 확인
+- D1 `firebase_google_login_states` migration 적용
+
+### 실패 Loop
+
+- Google Provider 미활성화: Firebase Provider 설정만 수정
+- Redirect URI 불일치: Google Cloud OAuth Client의 URI만 수정
+- state 만료·불일치: 새 로그인 flow로 재시도
+- Firebase role 미등록: 비공개 D1 `admin_roles` 확인
+- 세션 저장 실패: Worker Secret과 D1 `admin_sessions`만 확인
