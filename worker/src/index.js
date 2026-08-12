@@ -84,8 +84,8 @@ async function route(request, env) {
       return createAdminPost(request, env, claims);
     }
     if (url.pathname.startsWith('/api/admin/posts/') && request.method === 'PATCH') {
-      const claims = await requireAdmin(request, env);
-      return updateAdminPost(request, env, url.pathname.split('/').pop(), claims);
+      await requireAdmin(request, env);
+      return updateAdminPost(request, env, url.pathname.split('/').pop());
     }
     if (url.pathname.startsWith('/api/admin/posts/') && request.method === 'DELETE') {
       const claims = await requireAdmin(request, env);
@@ -182,7 +182,7 @@ async function createAdminPost(request, env, claims) {
   }
 }
 
-async function updateAdminPost(request, env, postId, claims) {
+async function updateAdminPost(request, env, postId) {
   if (!isSafeId(postId)) return json({ error: { code: 'INVALID_ID', message: '게시물 ID가 올바르지 않습니다.' } }, 400);
   const body = await request.json().catch(() => ({}));
   const title = cleanText(body.title, 120);
