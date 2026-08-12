@@ -1048,7 +1048,7 @@ async function loginAdmin(request, env) {
   if (!await isAdmin(claims.sub, env)) throw httpError('FORBIDDEN', '관리자 권한이 등록되지 않은 계정입니다.', 403);
 
   try {
-    return createAdminSession(payload, email, env, claims);
+    return await createAdminSession(payload, email, env, claims);
   } catch (error) {
     if (error.code === 'SECRET_CONFIG_INVALID') throw error;
     throw httpError('SESSION_STORE_FAILED', '관리자 세션을 저장할 수 없습니다.', 503);
