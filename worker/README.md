@@ -43,6 +43,47 @@ The media endpoint checks D1 visibility before requesting the private Drive file
 The repository code can be reviewed without credentials. Live deployment requires the repository owner to create the D1 database, create the Worker, configure Google OAuth redirect URIs, and enter secrets in Cloudflare. Those values must be entered in the provider consoles, not sent in chat.
 
 
+## Security boundary and secret registration
+
+The browser never receives a Firebase Web API key, Google OAuth secret, refresh token, or encryption key. The browser calls the Worker through an HTTPS HttpOnly session cookie.
+
+### Cloudflare Worker Secrets
+
+In Cloudflare Dashboard:
+
+1. Open Workers & Pages -> the `yehyun-portfolio-api` Worker.
+2. Open Settings -> Variables and Secrets.
+3. Under Secrets, add these names exactly:
+   - `FIREBASE_WEB_API_KEY`: the Firebase Web API key used only by the Worker to call Firebase Authentication REST APIs.
+   - `SESSION_ENCRYPTION_KEY`: a private random 32-byte Base64 key used to encrypt Firebase refresh tokens stored in D1.
+   - `GOOGLE_CLIENT_ID`: the Google OAuth client ID.
+   - `GOOGLE_CLIENT_SECRET`: the Google OAuth client secret.
+   - `GOOGLE_TOKEN_ENCRYPTION_KEY`: the private random 32-byte Base64 key used to encrypt the Google Drive refresh token.
+4. Save each value as an encrypted Secret, not a plaintext variable.
+5. Redeploy the Worker after saving or changing secrets.
+
+The repository contains only secret names. Never commit secret values or paste them into chat. The existing Firebase key detected by GitHub must be revoked or rotated in Google Cloud before closing the alert, even though it has been removed from the current source.
+
+### GitHub Actions Secrets
+
+These are separate from Worker Secrets. In GitHub:
+
+1. Open Settings -> Secrets and variables -> Actions.
+2. Add repository secrets:
+   - `CLOUDFLARE_API_TOKEN`: a Cloudflare API token with Account -> D1 -> Edit permission.
+   - `CLOUDFLARE_ACCOUNT_ID`: the Cloudflare account ID.
+3. Do not add Firebase keys, OAuth secrets, refresh tokens, or encryption keys to GitHub Actions for the D1 migration workflow.
+
+The D1 workflow uses only the two GitHub secrets above to authenticate Wrangler. It reads SQL files from the repository and never prints secret values.
+
+### Authentication behavior
+
+- `POST /api/auth/login` sends the submitted email and password over HTTPS to the Worker.
+- The Worker calls Firebase Authentication, verifies the returned Firebase ID token, and checks `admin_roles`.
+- The Worker stores only an encrypted refresh token in D1.
+- The browser receives a persistent HttpOnly, Secure, SameSite=None session cookie. The cookie is revoked by `POST /api/auth/logout`.
+- Admin API routes accept the session cookie and do not require a Firebase key in the browser.
+
 ## GitHub Actions D1 migration
 
 The repository includes .github/workflows/apply-d1-migrations.yml. It is manual-only, so a normal GitHub commit does not change the production database.
