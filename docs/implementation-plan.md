@@ -385,7 +385,7 @@ Gate: CI, HTTP, 브라우저 결과를 각각 분리 기록하고 모두 필요�
 
 ### Worker 배포 보안 규칙
 
-- `CLOUDFLARE_API_TOKEN`과 `CLOUDFLARE_ACCOUNT_ID`는 GitHub Actions Secret으로만 사용한다.
+- `CLOUDFLARE_API_TOKEN`은 D1 migration 전용, `CLOUDFLARE_WORKER_API_TOKEN`은 Worker 배포 전용으로 분리하고 둘 다 GitHub Actions Secret으로만 사용한다.
 - Firebase Web API Key, Google OAuth Secret, refresh token, 암호화 키는 Worker Secret으로만 사용한다.
 - Worker 설정 파일에는 공개 가능한 프로젝트 식별자와 D1 binding만 기록한다.
 - workflow는 Worker 경로만 배포하며 정적 Pages 파일이나 `Content/**`를 변경하지 않는다.
