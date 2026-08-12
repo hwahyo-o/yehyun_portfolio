@@ -725,3 +725,37 @@ Gate: 모든 CI 성공, 브라우저 console에 미해결 오류 없음, 실제 
 - 외부 콘솔에서 사용자가 확인할 Secret·Provider·authorized domain 체크리스트
 - 비밀값 없는 운영 인수인계 기록
 
+
+
+## 22. 최종 실행 결과 및 인수인계 (2026-08-12 KST)
+
+### 완료 결과
+
+- 계획 문서를 drill의 코드 변경보다 먼저 커밋했다.
+- PR #27에서 인증·방문자 세션·활동 원장·예약 백업 기능을 main에 병합했다.
+- PR #28에서 Worker 배포 전 D1 005·006 멱등 마이그레이션 단계를 추가하고 main에 병합했다.
+- GitHub Actions의 drill 검증, GitHub Pages 배포, Cloudflare Worker 배포가 모두 성공했다.
+- 외부 브라우저 화면 확인은 운영자가 직접 수행한다. 로컬 실행 환경에서는 브라우저 연결 및 외부 네트워크가 제한되어 자동 화면 검증을 수행하지 않았다.
+
+### 운영 설정 체크리스트
+
+1. Worker Secret ADMIN_EMAIL을 지정 관리자 이메일로 설정한다.
+2. Firebase Authentication에서 Email/Password와 Google Provider를 활성화한다.
+3. Google OAuth Web Client의 로그인 callback URI와 Firebase authorized domain을 확인한다.
+4. FIREBASE_WEB_API_KEY, SESSION_ENCRYPTION_KEY, OAuth Secret, FIRESTORE_SERVICE_ACCOUNT_JSON은 Worker Secret에만 저장한다.
+5. Worker 배포 workflow가 005·006을 자동 적용하는지 확인한다. 실패 시 수동 migration workflow의 확인 문자열을 사용한다.
+6. Firestore를 사용하려면 서비스 계정에 Datastore 권한을 부여하고 Secret 원문을 로그에 출력하지 않는다.
+
+### 권한·데이터 확인
+
+- 지정 관리자 이메일만 Worker의 admin 세션을 발급받는다.
+- 일반 이메일·Google 계정은 member, Firebase 익명 계정은 guest 세션으로 저장된다.
+- 관리자 API는 admin_sessions와 검증된 Firebase token을 다시 확인한다.
+- 이벤트는 D1 activity_events에 멱등 저장되며 Firestore Secret이 있을 때 외부 DB에도 기록된다.
+- 매일 UTC 11:00(KST 20:00)에 최근 24시간 이벤트를 activity_backup_runs에 checksum과 함께 저장한다.
+
+### 미완료 외부 작업
+
+- 이 작업 환경의 GitHub connector에는 branch delete API가 노출되지 않아 drill과 기존 keep 브랜치 삭제를 자동 수행할 수 없었다. 저장소 관리자 권한으로 아래 작업을 1회 실행해 main만 남긴다.
+  git push origin --delete drill keep
+- Firebase Provider, Worker Secret, Firestore 권한은 외부 콘솔에서 운영자가 확인해야 한다.
