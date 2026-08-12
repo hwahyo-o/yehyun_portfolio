@@ -205,6 +205,45 @@ async function authHeaders() {
   return { 'X-Portfolio-Request': 'portfolio-app' };
 }
 
+const authErrorMessages = {
+  AUTH_NOT_CONFIGURED: '로그인 서버 설정이 완료되지 않았습니다. 운영 설정을 확인해주세요.',
+  AUTH_SERVICE_ERROR: 'Firebase 인증 서비스를 확인할 수 없습니다. 잠시 후 다시 시도해주세요.',
+  AUTH_TOKEN_VERIFY_FAILED: '로그인 토큰을 확인할 수 없습니다. 다시 시도해주세요.',
+  SESSION_STORE_FAILED: '로그인 세션을 저장하지 못했습니다. 잠시 후 다시 시도해주세요.',
+  AUTH_FAILED: '이메일 또는 비밀번호를 확인해주세요.',
+  AUTH_REQUIRED: '관리자 로그인이 필요합니다.',
+  CSRF_BLOCKED: '허용되지 않은 요청입니다. 페이지를 새로고침한 뒤 다시 시도해주세요.',
+  FORBIDDEN: '관리자 권한이 등록되지 않은 계정입니다.',
+  GOOGLE_LOGIN_NOT_CONFIGURED: 'Google 로그인 설정이 완료되지 않았습니다.',
+  GOOGLE_OAUTH_TOKEN_EXCHANGE_FAILED: 'Google 인증 교환에 실패했습니다. OAuth 설정을 확인해주세요.',
+  FIREBASE_GOOGLE_SIGNIN_FAILED: 'Firebase Google 인증에 실패했습니다. Google Provider 설정을 확인해주세요.',
+};
+
+function authErrorMessage(error) {
+  return authErrorMessages[error?.code] || error?.message || '로그인 요청에 실패했습니다.';
+}
+
+async function setupVisitorSession() {
+  if (!apiBase) return;
+  try {
+    await apiRequest('/api/auth/guest', { method: 'POST' });
+  } catch {
+    // Public browsing remains available when Firebase guest auth is unavailable.
+  }
+}
+
+async function recordActivity(action, entityId = null) {
+  if (!apiBase) return;
+  try {
+    await apiRequest('/api/events', {
+      method: 'POST',
+      body: JSON.stringify({ action, entityId }),
+    });
+  } catch {
+    // Activity telemetry must not interrupt visitor actions.
+  }
+}
+
 async function apiRequest(path, options = {}) {
   if (!apiBase) throw new Error('API가 설정되지 않았습니다.');
   const headers = { ...(await authHeaders()), ...(options.headers || {}) };
@@ -568,9 +607,12 @@ function handleGoogleLoginCallback() {
   const result = window.location.hash.slice(1);
   const messages = {
     'admin-google-login-success': 'Google 로그인에 성공했습니다.',
+    'visitor-google-login-success': '방문자 로그인에 성공했습니다.',
     'admin-google-login-forbidden': 'Google 계정이 관리자 권한으로 등록되지 않았습니다.',
     'admin-google-login-expired': 'Google 로그인 요청이 만료되었습니다. 다시 시도해주세요.',
     'admin-google-login-link-required': '기존 Firebase 이메일 계정과 Google 계정 연결이 필요합니다. 먼저 이메일 로그인 계정에 Google 제공자를 연결해주세요.',
+    'admin-google-login-oauth-error': 'Google OAuth 교환에 실패했습니다. Redirect URI와 OAuth Client 설정을 확인해주세요.',
+    'admin-google-login-provider-error': 'Firebase Google Provider 인증에 실패했습니다. Provider 활성화와 계정 연결을 확인해주세요.',
     'admin-google-login-error': 'Google 로그인에 실패했습니다. 설정을 확인해주세요.',
   };
   if (!messages[result]) return;
@@ -613,9 +655,7 @@ function bindAdminActions() {
       adminLoginForm.reset();
       await verifyAdminSession();
     } catch (error) {
-      adminLoginStatus.textContent = error.code === 'FORBIDDEN'
-        ? '관리자 권한이 등록되지 않은 계정입니다.'
-        : error.message || '로그인 요청에 실패했습니다.';
+      adminLoginStatus.textContent = authErrorMessage(error);
     }
   });
   document.addEventListener('visibilitychange', checkAutoBackup);
@@ -631,6 +671,7 @@ function bindCommunityActions() {
         method: 'POST',
         body: JSON.stringify(Object.fromEntries(data.entries())),
       });
+      await recordActivity('guestbook.create');
       guestbookForm.reset();
       await loadCommunity();
     } catch (error) {
@@ -654,6 +695,7 @@ function bindCommunityActions() {
         method: 'POST',
         body: JSON.stringify({ message }),
       });
+      await recordActivity('dm.create', conversationId);
       chatForm.reset();
       await loadChat();
     } catch (error) {
@@ -767,7 +809,7 @@ bindNameShuffle();
 bindCommunityActions();
 bindAdminPasswordActions();
 bindAdminActions();
-loadCommunity();
+setupVisitorSession().finally(loadCommunity);
 startGalleryLoop();
 setupAuthSession();
 
