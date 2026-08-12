@@ -287,3 +287,103 @@ Gate 조건:
 - app.js의 800ms interval, transform 이동, reduced-motion 조건 확인
 - node --check app.js 및 verify workflow 확인
 - Pages URL의 HTML/CSS/JS 200 응답 및 정적 문자열 확인
+
+### 2026-08-12 Bootstrap 정적 연결 및 아이콘 표준화
+
+#### 문제별 수정 계획
+
+1. 현재 정적 HTML/CSS/JavaScript 구조를 유지하면서 Bootstrap 5.3.8 CSS를 CDN으로 연결한다.
+2. Bootstrap Icons 1.13.1을 CDN으로 연결하고 기능성 화살표·이동 아이콘을 아이콘 폰트로 통일한다.
+3. Bootstrap CSS는 기존 styles.css보다 먼저 로드하고, 기존 고유 시각 규칙은 styles.css에서 재정의한다.
+4. 기존 GNB, Gallery 장식, 카드, 이력서, 로딩 화면의 시각 방향과 동작을 Bootstrap 기본값 때문에 변경하지 않는다.
+5. Bootstrap JavaScript, npm, React, Vite, 빌드 도구는 추가하지 않는다. 현재 페이지에는 Bootstrap JS 컴포넌트가 필요하지 않다.
+6. Bootstrap으로 대체할 수 없는 로고·파비콘·Gallery 손/휴대폰·타원 장식은 기존 정적 자산과 CSS를 유지한다.
+7. CDN 의존성에는 버전과 SRI 무결성 값을 고정하고, API 키·토큰·비공개 식별자는 추가하지 않는다.
+8. 사용하지 않는 Bootstrap 클래스나 중복 아이콘 표현을 남기지 않는다.
+
+#### 계층별 범위
+
+- 화면: index.html의 Bootstrap CSS·Icons link, 버튼 아이콘, 필요한 Bootstrap 유틸리티 클래스
+- 처리: app.js의 route·loading·Gallery·scroll·font 동작은 변경하지 않음
+- 핵심 규칙: 기능성 아이콘은 Bootstrap Icons 사용, 고유 장식은 CSS 유지, 기존 route와 타이밍 보존
+- 저장·외부 서비스: jsDelivr의 고정 버전 Bootstrap CSS와 Bootstrap Icons만 추가
+- 의존성·앱 시작: Bootstrap CSS → Bootstrap Icons → 기존 styles.css → defer app.js 순서 유지
+
+#### Process Phase와 Gate
+
+- Phase A — 기준선 및 브랜치: 최신 main을 기준으로 drill을 재구성하고 기존 변경 이력을 보존 확인한다.
+- Phase B — 계획 선커밋: 이 Bootstrap 범위와 검증 기준을 implementation-plan.md에 먼저 기록한다.
+- Phase C — 의존성 연결: Bootstrap CSS와 Icons CDN link를 index.html head에 추가하고 SRI를 고정한다.
+- Phase D — 아이콘·유틸리티 적용: GNB, View More, TOP, 이전/다음의 기능성 화살표를 Bootstrap Icons로 교체한다. 기존 고유 레이아웃 클래스는 유지한다.
+- Phase E — 정적 검증: HTML 참조, JavaScript 문법, Bootstrap link 순서, 기존 동작 문자열, 비밀정보 노출 여부를 확인한다.
+- Phase F — CI·Pages 검증: drill workflow, PR workflow, main 병합, Pages 배포와 실제 HTTP 응답을 확인한다.
+
+Gate A:
+- drill이 현재 main commit에서 시작한다.
+- 열린 이전 PR이 없고 작업 대상 파일 범위가 확인된다.
+- main과 keep를 작업 중간에 변경하지 않는다.
+
+Gate B:
+- 문서가 구현보다 먼저 drill에 커밋된다.
+- 문서에 외부 의존성, 아이콘 범위, 보안 정책, 실패 Loop, 검증 절차가 기록된다.
+
+Gate C:
+- Bootstrap 5.3.8 CSS link가 styles.css보다 앞선다.
+- Bootstrap Icons 1.13.1 link가 존재한다.
+- Bootstrap CSS와 Icons 모두 HTTPS와 SRI를 사용한다.
+- Bootstrap JS, Popper, npm, React, Vite를 추가하지 않는다.
+
+Gate D:
+- GNB, View More, TOP, 이전/다음 기능성 화살표가 Bootstrap Icons로 표시된다.
+- Gallery 장식과 실제 로고·파비콘은 기존 표현을 유지한다.
+- 로딩 3000ms, 로딩 셔플 300ms, About 32px/400ms, Gallery 800ms, reduced-motion, hash route, scroll reset이 유지된다.
+- Bootstrap 기본값으로 모바일 overflow, focus, disabled 상태, 카드 간격이 깨지지 않는다.
+
+Gate E:
+- node --check app.js 통과
+- verify workflow 통과
+- Bootstrap link 순서·SRI·금지 의존성 검사 통과
+- API 키·토큰·비공개 식별자 없음
+- 정적 HTML/CSS/JS와 PNG asset 응답 확인
+
+Gate F:
+- drill 기준 검증 성공
+- main 대상 PR 생성 및 병합 성공
+- Pages build/deploy 성공
+- 실제 Pages URL의 index.html, styles.css, app.js, Bootstrap CDN link, logo, favicon HTTP 응답 확인
+- 브라우저 검증 가능 시 홈·카테고리·아이콘·반응형·reduced-motion을 확인하고, 불가능하면 브라우저 검증 unavailable로 분리 보고
+
+#### 실패 시 재수정 Loop
+
+1. 문서가 먼저 커밋되지 않았으면 구현 커밋을 중단하고 문서 커밋부터 만든다.
+2. Bootstrap CDN 또는 SRI가 잘못되면 공식 Bootstrap 문서의 동일 버전 link와 무결성 값을 다시 대조한다.
+3. Bootstrap 기본값이 기존 디자인을 덮으면 link 순서를 유지한 채 styles.css의 원인 선택자만 수정한다.
+4. 아이콘이 보이지 않으면 Bootstrap Icons link, icon class, aria-hidden과 대체 텍스트만 점검한다.
+5. 레이아웃이 깨지면 Bootstrap 유틸리티를 제거하거나 기존 고유 클래스와 충돌하는 최소 규칙만 수정한다.
+6. 기존 동작이 깨지면 app.js를 Bootstrap JS로 옮기지 않고 기존 상태·이벤트 계층만 복구한다.
+7. verify 실패 시 로그의 첫 원인에 해당하는 파일만 수정하고 같은 Gate를 재실행한다.
+8. Pages 실패 시 artifact 복사 대상과 link 경로를 확인한다.
+9. 브라우저 확인이 불가능하면 HTTP·Actions 성공과 브라우저 미검증을 분리 기록한다.
+
+#### Bootstrap 연결 및 정적 유지 규칙
+
+- Bootstrap CSS는 CDN으로만 연결하며 저장소에 npm lockfile이나 빌드 결과물을 추가하지 않는다.
+- Bootstrap Icons는 기능성 이동 아이콘에만 사용한다.
+- 기존 텍스트 라벨은 아이콘만으로 의미가 사라지지 않도록 유지하거나 접근성용 텍스트를 함께 둔다.
+- 장식용 CSS 도형을 Bootstrap 아이콘으로 억지로 치환하지 않는다.
+- styles.css는 Bootstrap의 보조 계층이며, 포트폴리오 고유 토큰·레이아웃·모션의 source of truth로 유지한다.
+- CDN 장애 시에도 정적 HTML과 기존 CSS만으로 핵심 화면이 표시되도록 Bootstrap에 핵심 레이아웃을 의존시키지 않는다.
+
+#### 검증 절차
+
+- 문서 선커밋 SHA 확인
+- index.html의 Bootstrap CSS → Bootstrap Icons → styles.css 순서 확인
+- Bootstrap 버전과 SRI 문자열 확인
+- node --check app.js
+- Bootstrap JS, Popper, npm, React, Vite 참조 부재 확인
+- 기능성 화살표의 Bootstrap Icons class 확인
+- 기존 route, timer, Gallery, reduced-motion, scroll reset 관련 문자열 보존 확인
+- workflow의 정적 entry point 검사 통과
+- GitHub Actions 결과와 PR 상태 확인
+- Pages URL의 HTML/CSS/JS/asset HTTP 응답 확인
+- 브라우저에서 아이콘 표시, 버튼 동작, 포커스, 모바일 overflow 확인
