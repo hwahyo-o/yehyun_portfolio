@@ -252,7 +252,7 @@ function cleanMediaUrl(value) {
 function assertRelativeAssetReferences(html, css, js) {
   const source = html + '\n' + css + '\n' + js;
   if (/<script[^>]+src\s*=\s*["'](?:https?:|\/\/)/i.test(html)
-    || /<(?:iframe|object|embed)\\b/i.test(html)
+    || /<(?:iframe|object|embed)\b/i.test(html)
     || /\s(?:src|href|action)\s*=\s*["'](?:https?:|\/\/|javascript:)/i.test(source)
     || /\son[a-z]+\s*=/i.test(source)
     || /javascript:/i.test(source)) {
