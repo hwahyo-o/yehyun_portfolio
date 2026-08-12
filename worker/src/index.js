@@ -36,6 +36,9 @@ async function route(request, env) {
     }
     if (url.pathname === '/api/events' && request.method === 'POST') return recordPublicEvent(request, env);
     if (url.pathname === '/api/guestbook/' && request.method === 'PATCH') return json({ error: { code: 'NOT_FOUND', message: '방명록을 찾을 수 없습니다.' } }, 404);
+    if (url.pathname.startsWith('/api/guestbook/') && url.pathname.endsWith('/replies') && request.method === 'POST') {
+      return createGuestbookReply(request, env, url.pathname.split('/')[3]);
+    }
     if (url.pathname.startsWith('/api/guestbook/') && ['PATCH', 'DELETE'].includes(request.method)) {
       const commentId = url.pathname.split('/').pop();
       return request.method === 'PATCH'
@@ -137,6 +140,21 @@ async function readGuestbookPassword(row, password) {
   if (!row || typeof password !== 'string' || password.length < 4 || password.length > 64) return false;
   const hash = await hashPassword(password, decodeBytes(row.password_salt));
   return safeEqual(hash, row.password_hash);
+}
+
+async function createGuestbookReply(request, env, commentId) {
+  if (!isSafeId(commentId)) return json({ error: { code: 'INVALID_ID', message: '방명록 ID가 올바르지 않습니다.' } }, 400);
+  const body = await request.json();
+  const name = cleanText(body.name, 30);
+  const content = cleanText(body.content, 1000);
+  const parent = await env.DB.prepare('SELECT id FROM guestbook_comments WHERE id = ? AND deleted_at IS NULL').bind(commentId).first();
+  if (!parent || !name || !content) return json({ error: { code: 'INVALID_INPUT', message: '대댓글 내용을 확인해주세요.' } }, 400);
+  const id = crypto.randomUUID();
+  const now = new Date().toISOString();
+  await env.DB.prepare("INSERT INTO guestbook_replies (id, comment_id, content, author_type, author_name, created_at) VALUES (?, ?, ?, 'visitor', ?, ?)")
+    .bind(id, commentId, content, name, now).run();
+  await recordNotification(env, 'guestbook_reply', 'Guestbook 대댓글', name + '님이 관리자 댓글에 대댓글을 남겼습니다.', id);
+  return json({ item: { id, commentId, name, content, date: now } }, 201);
 }
 
 async function updateGuestbook(request, env, commentId) {
@@ -264,7 +282,21 @@ async function disconnectDrive(env) {
 
 async function listAdminNotifications(env) {
   const result = await env.DB.prepare('SELECT id, type, title, body, entity_id, created_at, read_at FROM admin_notifications ORDER BY created_at DESC LIMIT 50').all();
-  return json({ items: result.results || [] });
+  const items = result.results || [];
+  const expiring = await env.DB.prepare("SELECT id, title, deleted_at FROM posts WHERE deleted_at IS NOT NULL AND datetime(deleted_at) > datetime('now') AND datetime(deleted_at) <= datetime('now', '+1 day') LIMIT 20").all();
+  (expiring.results || []).forEach((post) => {
+    items.push({
+      id: 'trash-expiring-' + post.id,
+      type: 'trash_expiring',
+      title: '휴지통 영구삭제 임박',
+      body: (post.title || '게시물') + '의 영구삭제까지 1일 이내입니다.',
+      entity_id: post.id,
+      created_at: post.deleted_at,
+      read_at: null,
+    });
+  });
+  items.sort((left, right) => String(right.created_at).localeCompare(String(left.created_at)));
+  return json({ items: items.slice(0, 50) });
 }
 
 async function markAdminNotificationsRead(env) {
@@ -426,7 +458,7 @@ async function restoreBackup(env, backupId) {
   rows('post_media').forEach((row) => statements.push(env.DB.prepare('INSERT INTO post_media (id, post_id, file_name, mime_type, size_bytes, sha256, drive_file_id, content_url, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)').bind(row.id, row.post_id, row.file_name, row.mime_type, row.size_bytes || 0, row.sha256 || null, row.drive_file_id || null, row.content_url || null, row.created_at)));
   rows('updates').forEach((row) => statements.push(env.DB.prepare('INSERT INTO updates (id, title, description, published_at, created_at, deleted_at) VALUES (?, ?, ?, ?, ?, ?)').bind(row.id, row.title, row.description || '', row.published_at, row.created_at, row.deleted_at || null)));
   rows('guestbook_comments').forEach((row) => statements.push(env.DB.prepare('INSERT INTO guestbook_comments (id, name, password_salt, password_hash, content, created_at, deleted_at) VALUES (?, ?, ?, ?, ?, ?, ?)').bind(row.id, row.name, row.password_salt, row.password_hash, row.content, row.created_at, row.deleted_at || null)));
-  rows('guestbook_replies').forEach((row) => statements.push(env.DB.prepare('INSERT INTO guestbook_replies (id, comment_id, content, created_at, deleted_at) VALUES (?, ?, ?, ?, ?)').bind(row.id, row.comment_id, row.content, row.created_at, row.deleted_at || null)));
+  rows('guestbook_replies').forEach((row) => statements.push(env.DB.prepare("INSERT INTO guestbook_replies (id, comment_id, content, created_at, deleted_at, author_type, author_name) VALUES (?, ?, ?, ?, ?, ?, ?)").bind(row.id, row.comment_id, row.content, row.created_at, row.deleted_at || null, row.author_type || 'visitor', row.author_name || '')));
   rows('conversations').forEach((row) => statements.push(env.DB.prepare('INSERT INTO conversations (id, created_at, updated_at) VALUES (?, ?, ?)').bind(row.id, row.created_at, row.updated_at)));
   rows('messages').forEach((row) => statements.push(env.DB.prepare('INSERT INTO messages (id, conversation_id, sender, content, created_at) VALUES (?, ?, ?, ?, ?)').bind(row.id, row.conversation_id, row.sender, row.content, row.created_at)));
   rows('admin_notifications').forEach((row) => statements.push(env.DB.prepare('INSERT INTO admin_notifications (id, type, title, body, entity_id, created_at, read_at) VALUES (?, ?, ?, ?, ?, ?, ?)').bind(row.id, row.type, row.title, row.body, row.entity_id || null, row.created_at, row.read_at || null)));
