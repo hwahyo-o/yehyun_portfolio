@@ -513,3 +513,21 @@ Drive 업로드 또는 GitHub 커밋 중 하나가 실패하면 게시물을 pub
 - CSRF 헤더 누락: 안전한 403 JSON
 - 정상 관리자 계정: 세션 쿠키 발급
 - OPTIONS preflight: 204와 CORS 헤더
+
+## 19. 2026-08-12 관리자 로그인 서버 오류 진단
+
+- Firebase 계정 존재 여부와 관리자 UID 등록 여부를 인증 흐름에서 분리한다.
+- Firebase 인증 실패는 `AUTH_FAILED`로 반환한다.
+- Firebase ID token 검증 실패는 `AUTH_TOKEN_VERIFY_FAILED`로 반환한다.
+- 세션 암호화·D1 저장 실패는 `SESSION_STORE_FAILED`로 반환한다.
+- Worker Secret 설정 오류는 `AUTH_NOT_CONFIGURED`로 반환한다.
+- 모든 오류 응답에는 비밀번호, Firebase 원문 응답, API 키, 토큰, SQL 값이 포함되지 않는다.
+- 브라우저는 안전한 사용자 메시지만 표시한다.
+
+### Gate
+
+- 빈 입력: 401 `AUTH_FAILED`
+- 존재하지 않는 계정: 401 `AUTH_FAILED`
+- 관리자 UID 미등록: 403 `FORBIDDEN`
+- 세션 저장 실패: 503 `SESSION_STORE_FAILED`
+- 성공 로그인: HttpOnly Secure 세션 쿠키와 200 응답
