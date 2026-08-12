@@ -33,4 +33,8 @@ jobs:
           grep -q 'bi-arrow-' index.html
           ! grep -q 'bootstrap.bundle.min.js\|bootstrap.min.js\|@popperjs' index.html
           node --check app.js
+          test -f worker/src/index.js
+          test -f worker/schema/001_initial.sql
+          node --check worker/src/index.js
+          ! grep -R "private_key\|client_secret\|refresh_token\|ADMIN_PIN\|4896\|1234" --exclude-dir=.git --exclude-dir=.github --exclude='*.example' .
           ! grep -R "from 'react'\|from 'react-dom'\|@vitejs/plugin-react" --exclude-dir=.git --exclude-dir=.github --exclude='*.yml' .
