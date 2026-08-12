@@ -29,7 +29,7 @@ async function route(request, env, ctx, visitorId) {
     }
     if (url.pathname === '/api/auth/guest' && request.method === 'POST') {
       requireCsrfHeader(request);
-      return await createAnonymousSession(env);
+      return await createAnonymousSession(request, env);
     }
     if (url.pathname === '/api/auth/member/login' && request.method === 'POST') {
       requireCsrfHeader(request);
@@ -1095,9 +1095,11 @@ async function loginAdmin(request, env) {
   }
 }
 
-async function createAnonymousSession(env) {
-  if (!env.DB || !env.FIREBASE_WEB_API_KEY || !env.SESSION_ENCRYPTION_KEY) {
-    throw httpError('AUTH_NOT_CONFIGURED', '방문자 로그인을 사용할 수 없습니다.', 503);
+async function createAnonymousSession(request, env) {
+  const existingToken = readCookie(request, 'portfolio_visitor_session');
+  if (existingToken) {
+    const existing = await env.DB.prepare('SELECT uid, email, provider FROM visitor_sessions WHERE id = ?').bind(await hashSessionToken(existingToken)).first();
+    if (existing) return withVisitorSessionCookie(json({ user: { uid: existing.uid, email: existing.email || null, role: existing.provider === 'anonymous' ? 'guest' : 'member' } }), existingToken);
   }
   const response = await fetch('https://identitytoolkit.googleapis.com/v1/accounts:signUp?key=' + encodeURIComponent(env.FIREBASE_WEB_API_KEY), {
     method: 'POST',
