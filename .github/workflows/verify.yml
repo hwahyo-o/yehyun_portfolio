@@ -43,6 +43,7 @@ jobs:
           grep -q '/oauth/google/login-callback' worker/src/index.js
           grep -q 'admin-google-login' index.html
           ! grep -R "AIza[0-9A-Za-z_-]\{20,\}\|firebase.*apiKey\|gstatic.com/firebasejs" --exclude-dir=.git --exclude-dir=.github --exclude='*.example' .
+          ! grep -Eq "firebase|authDomain|projectId|messagingSenderId|apiKey" config.js
           node --check worker/src/index.js
           ! grep -R "BEGIN PRIVATE KEY\|GOCSPX-[0-9A-Za-z_-]\{20,\}\|ADMIN_PIN\|4896\|1234" --exclude-dir=.git --exclude-dir=.github --exclude='*.example' .
           ! grep -R "from 'react'\|from 'react-dom'\|@vitejs/plugin-react" --exclude-dir=.git --exclude-dir=.github --exclude='*.yml' .
