@@ -652,7 +652,6 @@ function bindAdminActions() {
           password: String(data.get('password') || ''),
         }),
       });
-      await recordActivity('auth.login');
       adminLoginForm.reset();
       await verifyAdminSession();
     } catch (error) {
