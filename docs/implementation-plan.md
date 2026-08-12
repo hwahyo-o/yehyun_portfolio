@@ -817,3 +817,24 @@ Gate: 모든 CI 성공, 브라우저 console에 미해결 오류 없음, 실제 
 - 이메일·익명·Google 인증 경로가 동일한 Auth lookup 검증기를 사용
 - invalid/expired/disabled token은 안전한 401 계열 코드로 반환
 - 관리자 이메일 비교는 lookup 결과의 검증된 email만 사용
+
+
+## 26. 2026-08-12 인증 Secret·Firebase Provider 업그레이드
+
+### 원인
+
+- `SESSION_ENCRYPTION_KEY`가 Base64 32바이트 형식만 허용되어, 운영자가 설정한 유효한 32바이트 hex 또는 32문자 Secret도 `SECRET_CONFIG_INVALID`로 거부될 수 있었다.
+- Firebase 오류 응답을 모두 같은 코드로 처리해 API key 설정 오류와 잘못된 계정 정보를 구분하기 어려웠다.
+
+### 수정
+
+- 세션 암호화 키는 Base64, Base64URL, 64자리 hex, 정확히 32바이트 UTF-8 문자열만 허용한다.
+- 허용 길이 밖의 값은 계속 안전하게 거부하며 키 원문은 로그·응답에 남기지 않는다.
+- Firebase Email/Password·Anonymous·Google 응답의 API key 오류, Provider 비활성화, 계정 오류를 내부 코드로 분류한다.
+
+### Gate
+
+- drill `Verify static portfolio` 성공
+- 세션 키 파서가 약한 임의 문자열을 허용하지 않음
+- Firebase API key·Provider 오류가 서버 500 대신 안전한 503/401 계열 코드로 반환됨
+- Pages와 Worker 배포 후 운영 화면에서 이메일·Google 로그인을 직접 확인
