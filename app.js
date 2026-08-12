@@ -223,6 +223,15 @@ function authErrorMessage(error) {
   return authErrorMessages[error?.code] || error?.message || '로그인 요청에 실패했습니다.';
 }
 
+async function setupVisitorSession() {
+  if (!apiBase) return;
+  try {
+    await apiRequest('/api/auth/guest', { method: 'POST' });
+  } catch {
+    // Public browsing remains available when Firebase guest auth is unavailable.
+  }
+}
+
 async function recordActivity(action, entityId = null) {
   if (!apiBase) return;
   try {
@@ -800,7 +809,7 @@ bindNameShuffle();
 bindCommunityActions();
 bindAdminPasswordActions();
 bindAdminActions();
-loadCommunity();
+setupVisitorSession().finally(loadCommunity);
 startGalleryLoop();
 setupAuthSession();
 
