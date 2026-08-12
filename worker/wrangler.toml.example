@@ -19,4 +19,5 @@ database_id = "3a72f8d7-cf47-4afc-8b05-1773c67a0b7e"
 # wrangler secret put GOOGLE_CLIENT_ID
 # wrangler secret put GOOGLE_CLIENT_SECRET
 # wrangler secret put GOOGLE_REFRESH_TOKEN
+# wrangler secret put GOOGLE_TOKEN_ENCRYPTION_KEY
 # Do not put secret values in this file or the repository.
