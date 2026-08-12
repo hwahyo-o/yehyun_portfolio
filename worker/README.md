@@ -83,6 +83,7 @@ The D1 workflow uses only the two GitHub secrets above to authenticate Wrangler.
 - The Worker stores only an encrypted refresh token in D1.
 - The browser receives a persistent HttpOnly, Secure, SameSite=None session cookie. The cookie is revoked by `POST /api/auth/logout`.
 - Admin API routes accept the session cookie and do not require a Firebase key in the browser.
+- Cookie-authenticated requests also require the app-specific X-Portfolio-Request header to reduce cross-site request forgery.
 
 ## GitHub Actions D1 migration
 
