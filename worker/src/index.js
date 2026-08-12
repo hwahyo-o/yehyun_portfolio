@@ -700,6 +700,25 @@ async function getOrCreateDriveFolder(token, name, parentId = null) {
   return payload.id;
 }
 
+async function uploadDriveFile(token, fileName, mimeType, bytes, parentId) {
+  const boundary = 'portfolio_file_' + crypto.randomUUID();
+  const metadata = JSON.stringify({ name: fileName, parents: [parentId] });
+  const header = '--' + boundary + '\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n' + metadata
+    + '\r\n--' + boundary + '\r\nContent-Type: ' + mimeType + '\r\n\r\n';
+  const footer = '\r\n--' + boundary + '--';
+  const body = new Blob([header, bytes, footer]);
+  const response = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,name,mimeType,size', {
+    method: 'POST',
+    headers: {
+      Authorization: 'Bearer ' + token,
+      'Content-Type': 'multipart/related; boundary=' + boundary,
+    },
+    body,
+  });
+  if (!response.ok) throw httpError('DRIVE_UPLOAD_FAILED', '원본 파일을 Google Drive에 저장하지 못했습니다.', 502);
+  return response.json();
+}
+
 async function uploadDriveJson(token, fileName, payload, parentId) {
   const boundary = 'portfolio_backup_boundary';
   const body = [
