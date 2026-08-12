@@ -75,6 +75,22 @@ async function route(request, env) {
       await requireAdmin(request, env);
       return createBackup(request, env);
     }
+    if (url.pathname === '/api/admin/posts' && request.method === 'GET') {
+      await requireAdmin(request, env);
+      return listAdminPosts(env);
+    }
+    if (url.pathname === '/api/admin/posts' && request.method === 'POST') {
+      const claims = await requireAdmin(request, env);
+      return createAdminPost(request, env, claims);
+    }
+    if (url.pathname.startsWith('/api/admin/posts/') && request.method === 'PATCH') {
+      await requireAdmin(request, env);
+      return updateAdminPost(request, env, url.pathname.split('/').pop());
+    }
+    if (url.pathname.startsWith('/api/admin/posts/') && request.method === 'DELETE') {
+      const claims = await requireAdmin(request, env);
+      return deleteAdminPost(request, env, url.pathname.split('/').pop(), claims);
+    }
     if (url.pathname.startsWith('/api/admin/backups/') && url.pathname.endsWith('/download') && request.method === 'GET') {
       await requireAdmin(request, env);
       return downloadBackup(env, url.pathname.split('/')[4]);
@@ -85,7 +101,7 @@ async function route(request, env) {
     }
     if (url.pathname.startsWith('/api/admin/')) {
       await requireAdmin(request, env);
-      return json({ error: { code: 'ADMIN_WRITE_PENDING', message: '관리자 CMS 연결 단계입니다.' } }, 501);
+      return json({ error: { code: 'ADMIN_WRITE_PENDING', message: '해당 관리자 기능은 아직 연결되지 않았습니다.' } }, 501);
     }
     return json({ error: { code: 'NOT_FOUND', message: '요청 경로를 찾을 수 없습니다.' } }, 404);
   } catch (error) {
@@ -112,6 +128,169 @@ async function getPost(request, env, postId) {
   const media = await env.DB.prepare('SELECT id, file_name, mime_type, size_bytes, content_url FROM post_media WHERE post_id = ? ORDER BY file_name').bind(postId).all();
   const origin = new URL(request.url).origin;
   return json({ item: { ...row, media: (media.results || []).map((file) => ({ ...file, url: file.content_url || `${origin}/api/media/${postId}/${file.id}` })) } });
+}
+
+async function listAdminPosts(env) {
+  const result = await env.DB.prepare(
+    'SELECT id, type, title, description, body_html, is_private, status, content_path, published_at, created_at, updated_at FROM posts WHERE deleted_at IS NULL ORDER BY updated_at DESC LIMIT 100',
+  ).all();
+  return json({ items: result.results || [] });
+}
+
+async function createAdminPost(request, env, claims) {
+  const body = await request.json().catch(() => ({}));
+  const input = validatePostInput(body);
+  if (!env.GITHUB_CONTENT_TOKEN || !env.GITHUB_REPOSITORY) {
+    throw httpError('CONTENT_PUBLISH_NOT_CONFIGURED', 'Content 배포 설정이 필요합니다.', 503);
+  }
+
+  const id = crypto.randomUUID();
+  const now = new Date().toISOString();
+  const folder = buildKstContentFolder(now, input.title, id);
+  const contentPath = 'Content/' + folder;
+  const jobId = crypto.randomUUID();
+  await env.DB.batch([
+    env.DB.prepare('INSERT INTO posts (id, type, title, description, body_html, is_private, status, content_path, published_at, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
+      .bind(id, input.type, input.title, input.description, input.html, input.isPrivate ? 1 : 0, 'backup_pending', contentPath, input.status === 'published' ? now : null, now, now),
+    env.DB.prepare('INSERT INTO upload_jobs (id, post_id, status, created_at, updated_at) VALUES (?, ?, ?, ?, ?)')
+      .bind(jobId, id, 'pending', now, now),
+  ]);
+
+  try {
+    const files = [
+      { path: contentPath + '/index.html', value: input.html },
+      { path: contentPath + '/style.css', value: input.css },
+      { path: contentPath + '/script.js', value: input.js },
+      { path: contentPath + '/media-manifest.json', value: JSON.stringify(input.media) },
+    ];
+    let commitSha = '';
+    for (const file of files) {
+      commitSha = await putGitHubContent(env, file.path, file.value, 'content: publish ' + id);
+    }
+    await env.DB.batch([
+      env.DB.prepare("UPDATE upload_jobs SET status = 'content_committed', github_commit_sha = ?, updated_at = ? WHERE id = ?").bind(commitSha, new Date().toISOString(), jobId),
+      env.DB.prepare("UPDATE posts SET status = ?, updated_at = ? WHERE id = ?").bind(input.status, new Date().toISOString(), id),
+      env.DB.prepare('INSERT INTO audit_logs (id, uid, action, entity_type, entity_id, created_at) VALUES (?, ?, ?, ?, ?, ?)')
+        .bind(crypto.randomUUID(), claims.sub, 'content_publish', 'post', id, new Date().toISOString()),
+    ]);
+    return json({ item: { id, contentPath, status: input.status }, uploadJobId: jobId }, 201);
+  } catch (error) {
+    await env.DB.prepare("UPDATE upload_jobs SET status = 'failed', error_code = ?, updated_at = ? WHERE id = ?")
+      .bind(error.code || 'CONTENT_PUBLISH_FAILED', new Date().toISOString(), jobId).run();
+    await env.DB.prepare("UPDATE posts SET status = 'draft', updated_at = ? WHERE id = ?").bind(new Date().toISOString(), id).run();
+    throw httpError('CONTENT_PUBLISH_FAILED', 'Content 배포에 실패했습니다. 업로드 상태를 확인해주세요.', 502);
+  }
+}
+
+async function updateAdminPost(request, env, postId) {
+  if (!isSafeId(postId)) return json({ error: { code: 'INVALID_ID', message: '게시물 ID가 올바르지 않습니다.' } }, 400);
+  const body = await request.json().catch(() => ({}));
+  const title = cleanText(body.title, 120);
+  const description = cleanText(body.description, 2000);
+  const type = ['Graphic', 'UX/UI', 'Video'].includes(body.type) ? body.type : null;
+  if (!title || !type) return json({ error: { code: 'INVALID_INPUT', message: '게시물 정보를 확인해주세요.' } }, 400);
+  const row = await env.DB.prepare('SELECT id FROM posts WHERE id = ? AND deleted_at IS NULL').bind(postId).first();
+  if (!row) return json({ error: { code: 'NOT_FOUND', message: '게시물을 찾을 수 없습니다.' } }, 404);
+  await env.DB.prepare('UPDATE posts SET title = ?, description = ?, type = ?, updated_at = ? WHERE id = ?')
+    .bind(title, description, type, new Date().toISOString(), postId).run();
+  return json({ ok: true });
+}
+
+async function deleteAdminPost(request, env, postId, claims) {
+  if (!isSafeId(postId)) return json({ error: { code: 'INVALID_ID', message: '게시물 ID가 올바르지 않습니다.' } }, 400);
+  const row = await env.DB.prepare('SELECT id, title FROM posts WHERE id = ? AND deleted_at IS NULL').bind(postId).first();
+  if (!row) return json({ error: { code: 'NOT_FOUND', message: '게시물을 찾을 수 없습니다.' } }, 404);
+  const now = new Date().toISOString();
+  await env.DB.batch([
+    env.DB.prepare("UPDATE posts SET deleted_at = ?, status = 'deleted', updated_at = ? WHERE id = ?").bind(now, now, postId),
+    env.DB.prepare('INSERT INTO audit_logs (id, uid, action, entity_type, entity_id, created_at) VALUES (?, ?, ?, ?, ?, ?)')
+      .bind(crypto.randomUUID(), claims.sub, 'post_delete', 'post', postId, now),
+  ]);
+  return json({ ok: true, deletedAt: now });
+}
+
+function validatePostInput(body) {
+  const type = ['Graphic', 'UX/UI', 'Video'].includes(body.type) ? body.type : '';
+  const title = cleanText(body.title, 120);
+  const description = cleanText(body.description, 2000);
+  const html = String(body.html || '');
+  const css = String(body.css || '');
+  const js = String(body.js || '');
+  const status = body.status === 'published' ? 'published' : 'draft';
+  const isPrivate = Boolean(body.isPrivate);
+  const media = Array.isArray(body.media) ? body.media.slice(0, 20).map((item) => ({
+    fileName: cleanFileName(item.fileName),
+    mimeType: cleanText(item.mimeType, 100),
+    sizeBytes: Number(item.sizeBytes) || 0,
+    url: cleanMediaUrl(item.url),
+  })) : [];
+  if (!type || !title || !html || html.length > 200000 || css.length > 200000 || js.length > 200000) {
+    throw httpError('INVALID_INPUT', '게시물 정보 또는 파일 크기를 확인해주세요.', 400);
+  }
+  if (html.length + css.length + js.length > 450000) {
+    throw httpError('INVALID_INPUT', '게시물 전체 파일 크기를 줄여주세요.', 400);
+  }
+  assertRelativeAssetReferences(html, css, js);
+  return { type, title, description, html, css, js, status, isPrivate, media };
+}
+
+function cleanFileName(value) {
+  const name = String(value || '').trim();
+  if (!name || name.length > 120 || /[\\/\0\x00-\x1F]/.test(name) || name === '.' || name === '..') {
+    throw httpError('INVALID_FILE_NAME', '파일명이 올바르지 않습니다.', 400);
+  }
+  return name;
+}
+
+function cleanMediaUrl(value) {
+  const url = String(value || '').trim();
+  if (!url) return null;
+  if (!url.startsWith('/api/media/')) throw httpError('INVALID_MEDIA_URL', '미디어 URL은 Worker 경로만 사용할 수 있습니다.', 400);
+  return url.slice(0, 300);
+}
+
+function assertRelativeAssetReferences(html, css, js) {
+  const source = html + '\n' + css + '\n' + js;
+  if (/<script[^>]+src\s*=\s*["'](?:https?:|\/\/)/i.test(html)
+    || /<(?:iframe|object|embed)\b/i.test(html)
+    || /\s(?:src|href|action)\s*=\s*["'](?:https?:|\/\/|javascript:)/i.test(source)
+    || /\son[a-z]+\s*=/i.test(source)
+    || /javascript:/i.test(source)) {
+    throw httpError('UNSAFE_CONTENT', '외부 실행 코드 또는 위험한 HTML을 사용할 수 없습니다.', 400);
+  }
+  if (/(?:^|[("'=])\s*\.\.(?:[/"')?#]|$)/m.test(source)) {
+    throw httpError('UNSAFE_CONTENT', '상위 경로 참조는 사용할 수 없습니다.', 400);
+  }
+}
+
+function buildKstContentFolder(iso, title, id) {
+  const date = new Date(iso);
+  const kst = new Date(date.getTime() + 9 * 60 * 60 * 1000);
+  const stamp = kst.toISOString().slice(0, 19).replace('T', '_').replaceAll(':', '-') + '_KST';
+  const slug = slugify(title) + '-' + id.slice(0, 8);
+  return stamp + '/' + slug;
+}
+
+function slugify(value) {
+  return String(value).toLowerCase().normalize('NFKD').replace(/[^a-z0-9가-힣]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 80) || 'post';
+}
+
+async function putGitHubContent(env, path, content, message) {
+  const [owner, repo] = String(env.GITHUB_REPOSITORY || '').split('/');
+  if (!owner || !repo || !env.GITHUB_CONTENT_TOKEN) throw httpError('CONTENT_PUBLISH_NOT_CONFIGURED', 'Content 배포 설정이 필요합니다.', 503);
+  const response = await fetch('https://api.github.com/repos/' + encodeURIComponent(owner) + '/' + encodeURIComponent(repo) + '/contents/' + path.split('/').map(encodeURIComponent).join('/'), {
+    method: 'PUT',
+    headers: {
+      Authorization: 'Bearer ' + env.GITHUB_CONTENT_TOKEN,
+      Accept: 'application/vnd.github+json',
+      'Content-Type': 'application/json',
+      'User-Agent': 'yehyun-portfolio-worker',
+    },
+    body: JSON.stringify({ message, content: encodeText(content), branch: env.GITHUB_BRANCH || 'main' }),
+  });
+  if (!response.ok) throw httpError('GITHUB_CONTENT_FAILED', 'GitHub Content 커밋에 실패했습니다.', 502);
+  const payload = await response.json();
+  return payload.commit?.sha || '';
 }
 
 async function listUpdates(env) {
@@ -727,6 +906,10 @@ function safeEqual(left, right) {
   let result = 0;
   a.forEach((value, index) => { result |= value ^ b[index]; });
   return result === 0;
+}
+
+function encodeText(value) {
+  return encode(new TextEncoder().encode(String(value)));
 }
 
 function encode(bytes) {

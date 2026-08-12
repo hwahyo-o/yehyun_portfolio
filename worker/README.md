@@ -55,6 +55,7 @@ In Cloudflare Dashboard:
 2. Open Settings -> Variables and Secrets.
 3. Under Secrets, add these names exactly:
    - `FIREBASE_WEB_API_KEY`: the Firebase Web API key used only by the Worker to call Firebase Authentication REST APIs.
+   - `GITHUB_CONTENT_TOKEN`: a separate least-privilege GitHub credential used only to create files under `Content/**`.
    - `SESSION_ENCRYPTION_KEY`: a private random 32-byte Base64 key used to encrypt Firebase refresh tokens stored in D1.
    - `GOOGLE_CLIENT_ID`: the Google OAuth client ID.
    - `GOOGLE_CLIENT_SECRET`: the Google OAuth client secret.
@@ -62,7 +63,7 @@ In Cloudflare Dashboard:
 4. Save each value as an encrypted Secret, not a plaintext variable.
 5. Redeploy the Worker after saving or changing secrets.
 
-The repository contains only secret names. Never commit secret values or paste them into chat. The existing Firebase key detected by GitHub must be revoked or rotated in Google Cloud before closing the alert, even though it has been removed from the current source.
+The repository contains only secret names. `GITHUB_REPOSITORY` and `GITHUB_BRANCH` are public configuration; the GitHub credential is not. Never commit secret values or paste them into chat. The existing Firebase key detected by GitHub must be revoked or rotated in Google Cloud before closing the alert, even though it has been removed from the current source.
 
 ### GitHub Actions Secrets
 

@@ -406,3 +406,35 @@ Gate: CI, HTTP, 브라우저 결과를 각각 분리 기록하고 모두 필요�
 - Worker 런타임 실패: 해당 API 경계만 수정하고 Pages 화면을 임의로 변경하지 않는다.
 - Drive OAuth 실패: Redirect URI·OAuth secret·refresh token 저장 흐름만 수정한다.
 - 각 수정 후 동일 Gate를 재실행하며 Secret 값은 로그와 문서에 남기지 않는다.
+
+## 15. 2026-08-12 관리자 CMS·Content 업로드 Phase
+
+### 범위
+
+- 관리자 전용 게시물 작성·수정·soft delete API
+- 게시물의 HTML/CSS/JS 파일 검증
+- GitHub `Content/YYYY-MM-DD_HH-mm-ss_KST/<post-slug>/` 경로 생성
+- HTML/CSS/JS와 `media-manifest.json`만 GitHub Content에 커밋
+- Google Drive 백업은 원본 이미지·동영상과 원본 HTML/CSS/JS를 게시물별 폴더에 저장
+- 업로드 작품 실행은 sandbox iframe과 상대 경로 파일만 허용
+
+### 보안 경계
+
+- GitHub 쓰기 토큰은 Worker Secret `GITHUB_CONTENT_TOKEN`으로만 저장한다.
+- 토큰은 `Content/**` 경로의 Contents 쓰기만 허용하는 별도 GitHub App 또는 fine-grained token을 사용한다.
+- 원본 파일명·slug·경로는 제어문자, `..`, 절대경로, 외부 URL을 거부한다.
+- HTML의 `script src`, `link href`, 이미지·동영상 URL은 같은 업로드 폴더의 상대경로만 허용한다.
+- `javascript:`, 외부 script, iframe, object, embed, form action, inline event handler는 거부하거나 sandbox에서 실행하지 않는다.
+- 파일 크기·파일 수·MIME·UTF-8을 서버에서 검사하고 브라우저 제한은 보조 수단으로만 사용한다.
+- GitHub에 대용량 이미지·동영상 원본은 커밋하지 않는다. Content에는 Worker 미디어 URL manifest만 기록한다.
+- D1 write와 GitHub commit이 한 원자 트랜잭션이 아니므로 upload_jobs 상태를 `pending → committed → published`로 기록하고 실패 시 재시도 가능한 상태로 남긴다.
+
+### Gate
+
+- 계획 문서 선커밋
+- 비밀값 없는 Worker 코드와 schema
+- 비관리자 요청 401/403
+- Content allowlist 외 경로 변경 불가
+- 업로드 HTML 외부 실행 경로 차단
+- PR CI와 보안 diff 검증 통과
+- main 병합 후 Pages/Worker 배포 성공
