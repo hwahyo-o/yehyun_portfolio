@@ -107,3 +107,19 @@ CREATE TABLE IF NOT EXISTS audit_logs (
   entity_id TEXT,
   created_at TEXT NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS google_oauth_states (
+  state TEXT PRIMARY KEY,
+  uid TEXT NOT NULL,
+  created_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS google_drive_connections (
+  id TEXT PRIMARY KEY,
+  uid TEXT NOT NULL,
+  google_subject TEXT,
+  refresh_token_ciphertext TEXT NOT NULL,
+  refresh_token_iv TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
