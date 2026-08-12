@@ -612,13 +612,23 @@ function oauthRedirect(env, status) {
 }
 
 function encryptionKeyBytes(encodedKey) {
-  try {
-    const bytes = decodeBytes(String(encodedKey || ''));
-    if (bytes.length !== 32) throw new Error('invalid key length');
-    return bytes;
-  } catch {
-    throw httpError('SECRET_CONFIG_INVALID', '서버 보안 설정이 올바르지 않습니다.', 503);
+  const value = String(encodedKey || '').trim();
+  if (!value) throw httpError('SECRET_CONFIG_INVALID', '서버 보안 설정이 올바르지 않습니다.', 503);
+
+  if (/^[0-9a-fA-F]{64}$/.test(value)) {
+    return Uint8Array.from(value.match(/.{2}/g), (pair) => Number.parseInt(pair, 16));
   }
+
+  try {
+    const bytes = decodeBytes(value);
+    if (bytes.length === 32) return bytes;
+  } catch {
+    // Try the exact-length UTF-8 form below.
+  }
+
+  const raw = new TextEncoder().encode(value);
+  if (raw.length === 32) return raw;
+  throw httpError('SECRET_CONFIG_INVALID', '서버 보안 설정이 올바르지 않습니다.', 503);
 }
 
 async function encryptSecret(value, encodedKey) {
