@@ -40,6 +40,7 @@ async function route(request, env, ctx, visitorId) {
       return await finishFirebaseGoogleLogin(request, env, ctx);
     }
     if (url.pathname === '/api/auth/session' && request.method === 'GET') {
+      if (!readCookie(request, 'portfolio_admin_session')) return json({ user: null });
       const claims = await requireAdmin(request, env);
       return json({ user: { uid: claims.sub, email: claims.email || null } });
     }

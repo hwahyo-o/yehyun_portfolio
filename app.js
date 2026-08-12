@@ -570,7 +570,13 @@ function startAdminScheduler() {
 
 async function verifyAdminSession() {
   try {
-    await apiRequest('/api/auth/session');
+    const payload = await apiRequest('/api/auth/session');
+    if (!payload.user) {
+      setAdminUi(false);
+      clearInterval(state.adminTimer);
+      clearInterval(state.notificationTimer);
+      return;
+    }
     setAdminUi(true);
     closeModal(adminLoginModal);
     startAdminScheduler();
