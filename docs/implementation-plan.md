@@ -588,3 +588,138 @@ When GitHub Secret Scanning detects a historical Firebase key:
 6. After rotation or revocation, close the GitHub Secret Scanning alert with the reason revoked or resolved. Closing the alert does not restore the old key and must happen only after step 3.
 
 The old value may remain in immutable Git history, but it is unusable after revocation. Rewriting public history is not part of the normal remediation because it can break deployed references and does not replace key revocation.
+
+
+## 21. 2026-08-12 관리자 인증·활동 기록·백업 복구 Phase
+
+### 확인된 운영 기준선
+
+- 기준 브랜치: 최신 `main`에서 생성한 `drill`
+- Pages와 Worker의 공개 health 경계는 응답하지만, 관리자 로그인 성공 여부는 Firebase 설정·토큰 검증·D1 세션 저장·관리자 권한 데이터의 조합에 의해 결정된다.
+- 현재 관리자 판정은 UID 기반 `admin_roles`에 의존하므로, 지정 이메일 정책을 Worker에서 별도로 강제해야 한다.
+- 기존 Google Drive OAuth는 관리자 로그인과 분리한다.
+- 비밀번호, API key, OAuth secret, refresh token, 세션 원문, Authorization header, 서비스 계정 원문은 문서·로그·응답에 기록하지 않는다.
+
+### 목표 역할 모델
+
+- `admin`: Firebase ID Token의 검증된 이메일이 운영 Secret으로 지정된 관리자 이메일과 일치할 때만 부여한다.
+- `member`: Firebase 이메일 또는 Google 계정으로 인증된 일반 방문자.
+- `guest`: Firebase 익명 계정 또는 아직 인증되지 않은 방문자.
+- `admin`만 관리자 게시물·백업·알림·설정 API를 호출할 수 있다.
+- `member`와 `guest`는 공개 게시물, 공유, 반응, Guestbook, Contact Email, Contact DM을 사용할 수 있다.
+
+### 계층별 구현 범위
+
+#### 화면
+
+- 로그인 오류를 안전한 오류 코드별 메시지로 표시한다.
+- 로그인 상태를 관리자·회원·게스트로 구분해 표시한다.
+- 관리자 전용 컨트롤은 서버 세션 검증이 끝난 뒤에만 노출한다.
+- Guestbook·DM·반응 실패는 재시도 가능한 상태로 표시한다.
+
+#### 처리
+
+- 이메일·Google·익명 인증 결과를 하나의 세션 상태로 정규화한다.
+- 모든 보호 API는 Worker에서 토큰, issuer, audience, 만료, 이메일 검증 상태와 역할을 재확인한다.
+- 활동 이벤트는 멱등 event ID를 사용해 즉시 저장하고 실패 시 제한된 재시도를 수행한다.
+- 인증 성공·실패, 게시물 조회·공유·반응, Guestbook, DM, 관리자 작업을 동일한 이벤트 계약으로 기록한다.
+
+#### 핵심 규칙
+
+- 관리자 이메일 비교는 trim 후 소문자화하고, 클라이언트 비교만으로 권한을 부여하지 않는다.
+- 익명·일반 계정은 관리자 API와 비공개 게시물에 접근할 수 없다.
+- 이벤트에는 UID/방문자 식별자, 행위, 대상 식별자, 시각, 결과 코드만 저장하며 비밀정보와 불필요한 원문은 저장하지 않는다.
+- 서버 시각은 UTC로 저장하고 운영 화면의 20:00 기준은 KST(UTC+09:00)로 계산한다.
+
+#### 저장·외부 서비스
+
+- Firebase Authentication은 계정·Provider·익명 세션의 원천이다.
+- Firebase DB는 계정별 활동 이벤트의 즉시 저장소로 사용한다.
+- Cloudflare Worker는 인증·권한·이벤트 기록·백업 API의 단일 경계다.
+- D1은 세션, 관리자 상태, 백업 manifest/checksum, 재시도 상태를 저장한다.
+- R2는 매일 생성되는 활동 snapshot을 보관한다.
+
+#### 의존성 연결
+
+- 화면은 API client와 session/activity service만 호출한다.
+- 처리 계층은 Firebase, Firestore, Worker, D1, R2 adapter를 직접 조작하지 않는다.
+- 외부 서비스 오류는 내부 오류 코드로 변환하고 UI에 원문을 전달하지 않는다.
+
+#### 앱 시작
+
+1. non-secret 설정 로드
+2. 기존 세션 복원 또는 게스트 세션 준비
+3. Worker 세션 확인
+4. 역할 상태 결정
+5. 활동 기록 초기화
+6. 화면과 관리자 기능을 역할에 맞게 활성화
+
+### Process Phase와 Gate
+
+#### Phase 21-A — 계획·기준선
+
+- 이 섹션을 코드 변경보다 먼저 `drill`에 커밋한다.
+- 현재 main SHA, 배포 상태, 기존 브랜치와 변경 범위를 기록한다.
+
+Gate: 문서 선커밋, 비밀값 없음, main 미변경.
+
+#### Phase 21-B — 이메일·Google·익명 인증
+
+- 이메일 로그인 오류를 Firebase 원문이 아닌 안전한 오류 코드로 변환한다.
+- Google OAuth state, callback, Firebase Provider 연결, 세션 발급을 검증한다.
+- 익명·일반 인증은 방문자 역할로 정규화한다.
+
+Gate: 관리자 성공, 일반 계정 관리자 거부, 익명 방문자 성공, 만료·위조 토큰 거부.
+
+#### Phase 21-C — 이메일 기반 관리자 정책
+
+- 관리자 이메일은 Worker Secret 또는 제한된 운영 변수로만 관리한다.
+- Firebase UID와 이메일의 불일치를 허용하지 않는다.
+- 기존 `admin_roles`는 보조적인 운영 확인값으로만 사용하고, 최종 권한은 지정 이메일과 검증된 Token에 묶는다.
+
+Gate: 다른 UID가 같은 이메일을 주장해도 거부, 이메일 미검증 계정 거부, 클라이언트 우회 거부.
+
+#### Phase 21-D — 활동 이벤트
+
+- Firebase DB에 계정별 이벤트를 즉시 기록한다.
+- 이벤트 쓰기는 UID/게스트 식별자 범위를 강제하고, 민감한 원문을 제거한다.
+- Firestore Rules 또는 Worker 검증으로 타 계정 이벤트 조회·수정을 차단한다.
+
+Gate: 관리자·회원·게스트 각각의 이벤트 저장, 계정 격리, 중복 event ID 무시, 실패 재시도.
+
+#### Phase 21-E — KST 20:00 백업
+
+- Cloudflare Cron은 UTC 11:00에 실행해 KST 20:00을 구현한다.
+- Firebase DB 이벤트를 기간별 snapshot으로 만들고 R2에 저장한다.
+- D1에 백업 시각, 범위, checksum, 상태, 재시도 횟수를 기록한다.
+
+Gate: 수동 실행과 Cron 실행 결과 일치, checksum 검증, 재실행 멱등성, 실패 알림, 비밀정보 미포함.
+
+#### Phase 21-F — 통합 검증·배포
+
+- 정적 문법·Worker 문법·계약 테스트·보안 패턴 검사 실행
+- Pages와 Worker 공개 endpoint 검증
+- 인증 계정별 API 권한 검증
+- 데스크톱·모바일 브라우저에서 로그인·Guestbook·DM smoke test
+
+Gate: 모든 CI 성공, 브라우저 console에 미해결 오류 없음, 실제 운영 Secret 미노출, main 병합 전 승인된 diff.
+
+### 실패 시 재수정 Loop
+
+- 인증 실패: Provider·redirect·token·세션 경계만 수정
+- 권한 실패: 이메일 정규화·역할 판정·Worker guard만 수정
+- 활동 저장 실패: 이벤트 schema·Firestore/Worker adapter만 수정
+- 백업 실패: Cron·snapshot·R2/D1 manifest만 수정
+- UI 실패: session/activity 상태 표시만 수정
+
+각 Loop는 실패 로그에서 비밀값을 제거한 뒤 해당 Gate만 재실행한다. 두 개 이상의 계층을 동시에 임의로 재작성하지 않는다.
+
+### 최종 검증 산출물
+
+- 변경된 파일 목록과 책임 계층
+- 각 Phase Gate 결과
+- 테스트 명령과 결과 요약
+- Pages/Worker 배포 run 링크
+- 외부 콘솔에서 사용자가 확인할 Secret·Provider·authorized domain 체크리스트
+- 비밀값 없는 운영 인수인계 기록
+
