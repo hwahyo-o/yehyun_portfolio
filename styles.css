@@ -1219,6 +1219,38 @@ body[data-theme="dark"] .film-section {
   color: var(--portfolio-text);
   background: var(--portfolio-bg);
 }
+.password-input-group {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+.password-input-group input {
+  padding-right: 76px;
+}
+.password-input-action {
+  position: absolute;
+  top: 50%;
+  display: grid;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  place-items: center;
+  border: 0;
+  color: var(--muted);
+  background: transparent;
+  transform: translateY(-50%);
+}
+.password-input-action:hover,
+.password-input-action:focus-visible {
+  color: var(--portfolio-text);
+}
+.password-input-action[data-password-action="toggle"] { right: 36px; }
+.password-input-action[data-password-action="clear"] { right: 6px; }
+.password-input-action:focus-visible {
+  outline: 2px solid var(--portfolio-primary);
+  outline-offset: 2px;
+  border-radius: 6px;
+}
 .admin-post-form {
   display: grid;
   gap: 12px;
