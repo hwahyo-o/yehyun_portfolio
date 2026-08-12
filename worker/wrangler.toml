@@ -15,3 +15,6 @@ GOOGLE_LOGIN_REDIRECT_URI = "https://yehyun-portfolio-api.ajas03974.workers.dev/
 binding = "DB"
 database_name = "yehyun-portfolio"
 database_id = "3a72f8d7-cf47-4afc-8b05-1773c67a0b7e"
+
+[triggers]
+crons = ["0 11 * * *"]
