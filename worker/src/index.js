@@ -54,6 +54,10 @@ async function route(request, env) {
       await requireAdmin(request, env);
       return listAdminNotifications(env);
     }
+    if (url.pathname === '/api/admin/notifications/read' && request.method === 'POST') {
+      await requireAdmin(request, env);
+      return markAdminNotificationsRead(env);
+    }
     if (url.pathname === '/api/admin/backups' && request.method === 'GET') {
       await requireAdmin(request, env);
       return listBackups(env);
@@ -261,6 +265,11 @@ async function disconnectDrive(env) {
 async function listAdminNotifications(env) {
   const result = await env.DB.prepare('SELECT id, type, title, body, entity_id, created_at, read_at FROM admin_notifications ORDER BY created_at DESC LIMIT 50').all();
   return json({ items: result.results || [] });
+}
+
+async function markAdminNotificationsRead(env) {
+  await env.DB.prepare('UPDATE admin_notifications SET read_at = COALESCE(read_at, ?) WHERE read_at IS NULL').bind(new Date().toISOString()).run();
+  return json({ ok: true });
 }
 
 async function listBackups(env) {
