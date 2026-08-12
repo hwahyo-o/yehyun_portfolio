@@ -187,6 +187,9 @@ async function verifyFirebaseToken(token, env) {
   const header = JSON.parse(decode(parts[0]));
   const claims = JSON.parse(decode(parts[1]));
   const now = Math.floor(Date.now() / 1000);
+  if (header.alg !== 'RS256' || !header.kid) {
+    throw httpError('INVALID_TOKEN', '인증 토큰 알고리즘이 올바르지 않습니다.', 401);
+  }
   if (!claims.sub || claims.aud !== env.FIREBASE_PROJECT_ID || claims.iss !== `https://securetoken.google.com/${env.FIREBASE_PROJECT_ID}` || claims.exp <= now) {
     throw httpError('INVALID_TOKEN', '인증 토큰이 만료되었거나 올바르지 않습니다.', 401);
   }
