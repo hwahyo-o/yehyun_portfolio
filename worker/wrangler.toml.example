@@ -6,12 +6,14 @@ compatibility_date = "2026-08-12"
 FIREBASE_PROJECT_ID = "yehyun-portfolio"
 ALLOWED_ORIGIN = "https://hwahyo-o.github.io"
 FRONTEND_URL = "https://hwahyo-o.github.io/yehyun_portfolio"
-GOOGLE_REDIRECT_URI = "https://YOUR_WORKER_SUBDOMAIN.workers.dev/oauth/google/callback"
+GOOGLE_CLIENT_ID = "805272266425-cqi3nl7odi9epd4denmnffqtl2stqq2o.apps.googleusercontent.com"
+FRONTEND_URL = "https://hwahyo-o.github.io/yehyun_portfolio"
+GOOGLE_REDIRECT_URI = "https://yehyun-portfolio-api.ajas03974.workers.dev/oauth/google/callback"
 
 [[d1_databases]]
 binding = "DB"
 database_name = "yehyun-portfolio"
-database_id = "SET_IN_CLOUDFLARE_DASHBOARD"
+database_id = "3a72f8d7-cf47-4afc-8b05-1773c67a0b7e"
 
 # Set secrets with Wrangler or the Cloudflare dashboard:
 # wrangler secret put GOOGLE_CLIENT_ID
