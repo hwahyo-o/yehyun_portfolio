@@ -890,3 +890,8 @@ Gate: 모든 CI 성공, 브라우저 console에 미해결 오류 없음, 실제 
 ### 보안 및 비밀값
 
 문서와 코드에는 API 키·Client Secret·세션 암호화 키·Firebase 서비스 계정 값을 기록하지 않는다. 해당 값은 GitHub/Cloudflare/Firebase의 비밀 저장소와 운영 설정에서만 관리한다.
+
+
+## 29. 2026-08-12 운영 재현 후 추가 수정
+
+운영 Worker에 잘못된 비밀번호를 보내면 Firebase가 정상적으로 401을 반환했지만, 성공 인증 뒤 실행되는 Firebase `accounts:lookup` 토큰 검증 호출에는 타임아웃이 빠져 있었다. 이 호출이 지연되면 프런트가 성공 세션을 받지 못해 로그인 중 상태가 지속될 수 있으므로 `fetchWithTimeout`(10초)을 적용했다. drill Actions 정적 검증은 성공했으며, 운영자 브라우저에서 올바른 계정으로 최종 확인한다.
