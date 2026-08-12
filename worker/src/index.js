@@ -1031,6 +1031,9 @@ async function finishFirebaseGoogleLogin(request, env) {
     if (reason.includes('EMAIL_EXISTS') || reason.includes('FEDERATED_USER_ID_ALREADY_LINKED')) {
       return oauthRedirect(env, 'admin-google-login-link-required');
     }
+    if (reason.includes('OPERATION_NOT_ALLOWED') || reason.includes('INVALID_PROVIDER_ID')) {
+      return oauthRedirect(env, 'admin-google-login-provider-disabled');
+    }
     return oauthRedirect(env, 'admin-google-login-provider-error');
   }
   const firebasePayload = await firebaseResponse.json();
