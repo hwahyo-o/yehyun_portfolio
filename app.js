@@ -223,6 +223,18 @@ function authErrorMessage(error) {
   return authErrorMessages[error?.code] || error?.message || '로그인 요청에 실패했습니다.';
 }
 
+async function recordActivity(action, entityId = null) {
+  if (!apiBase) return;
+  try {
+    await apiRequest('/api/events', {
+      method: 'POST',
+      body: JSON.stringify({ action, entityId }),
+    });
+  } catch {
+    // Activity telemetry must not interrupt visitor actions.
+  }
+}
+
 async function apiRequest(path, options = {}) {
   if (!apiBase) throw new Error('API가 설정되지 않았습니다.');
   const headers = { ...(await authHeaders()), ...(options.headers || {}) };
@@ -630,6 +642,7 @@ function bindAdminActions() {
           password: String(data.get('password') || ''),
         }),
       });
+      await recordActivity('auth.login');
       adminLoginForm.reset();
       await verifyAdminSession();
     } catch (error) {
@@ -649,6 +662,7 @@ function bindCommunityActions() {
         method: 'POST',
         body: JSON.stringify(Object.fromEntries(data.entries())),
       });
+      await recordActivity('guestbook.create');
       guestbookForm.reset();
       await loadCommunity();
     } catch (error) {
@@ -672,6 +686,7 @@ function bindCommunityActions() {
         method: 'POST',
         body: JSON.stringify({ message }),
       });
+      await recordActivity('dm.create', conversationId);
       chatForm.reset();
       await loadChat();
     } catch (error) {
