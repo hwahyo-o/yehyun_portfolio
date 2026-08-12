@@ -802,3 +802,18 @@ Gate: 모든 CI 성공, 브라우저 console에 미해결 오류 없음, 실제 
 - drill 최신 정적 검증 성공: Worker 문법, app.js 문법, migration 파일, Secret 패턴 검사
 - 운영 브라우저 화면 확인은 사용자가 직접 수행한다.
 - 실제 관리자 성공 로그인 여부는 Firebase 계정·Provider·Secret의 운영 상태에 종속되므로 화면 확인 결과에 따라 다음 재수정 Loop를 시작한다.
+
+
+## 25. Firebase Auth lookup 검증 전환
+
+- Cloudflare Worker에서 Firebase JWKS를 직접 import·verify하던 경로를 제거하고, Firebase Auth `accounts:lookup` API로 ID Token을 서버 측 검증한다.
+- Firebase가 검증한 `localId`, `email`, `emailVerified`, `disabled`만 역할 판정에 사용한다.
+- API 응답 원문·토큰·Secret은 Worker 로그와 브라우저에 전달하지 않는다.
+- 인증서 fetch/import 런타임 예외로 이메일·익명·Google 경로가 함께 500이 되는 공통 실패를 제거한다.
+
+### Gate
+
+- Worker/app 정적 검증 성공
+- 이메일·익명·Google 인증 경로가 동일한 Auth lookup 검증기를 사용
+- invalid/expired/disabled token은 안전한 401 계열 코드로 반환
+- 관리자 이메일 비교는 lookup 결과의 검증된 email만 사용
