@@ -39,6 +39,19 @@ const guestbookForm = document.querySelector('#guestbook-form');
 const chatPanel = document.querySelector('#chat-panel');
 const chatMessages = document.querySelector('#chat-messages');
 const chatForm = document.querySelector('#chat-form');
+const adminLoginButton = document.querySelector('#admin-login-button');
+const adminSessionTools = document.querySelector('#admin-session-tools');
+const adminLoginModal = document.querySelector('#admin-login-modal');
+const adminLoginForm = document.querySelector('#admin-login-form');
+const adminLoginStatus = document.querySelector('#admin-login-status');
+const settingsModal = document.querySelector('#settings-modal');
+const notificationCenter = document.querySelector('#notification-center');
+const notificationList = document.querySelector('#notification-list');
+const notificationCount = document.querySelector('#notification-count');
+const driveConnectionStatus = document.querySelector('#drive-connection-status');
+const backupList = document.querySelector('#backup-list');
+const backupListStatus = document.querySelector('#backup-list-status');
+const backupStatus = document.querySelector('#backup-status');
 
 function randomFont(previous) {
   const available = fonts.filter((font) => font !== previous);
@@ -183,16 +196,21 @@ function initTheme() {
   applyTheme(saved || 'light');
 }
 
-function apiRequest(path, options = {}) {
-  if (!apiBase) return Promise.reject(new Error('API is not configured'));
-  return fetch(`${apiBase}${path}`, {
+async function authHeaders() {
+  const headers = { 'Content-Type': 'application/json' };
+  if (state.user) headers.Authorization = 'Bearer ' + await state.user.getIdToken();
+  return headers;
+}
+
+async function apiRequest(path, options = {}) {
+  if (!apiBase) throw new Error('API가 설정되지 않았습니다.');
+  const response = await fetch(apiBase + path, {
     ...options,
-    headers: { 'Content-Type': 'application/json', ...(options.headers || {}) },
-  }).then(async (response) => {
-    const payload = await response.json().catch(() => ({}));
-    if (!response.ok) throw new Error(payload.error?.message || '요청을 처리하지 못했습니다.');
-    return payload;
+    headers: { ...(await authHeaders()), ...(options.headers || {}) },
   });
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(payload.error?.message || '요청을 처리하지 못했습니다.');
+  return payload;
 }
 
 function createText(tag, text, className = '') {
@@ -287,6 +305,206 @@ function startChatPolling() {
   state.chatTimer = window.setInterval(loadChat, 7000);
 }
 
+function openModal(modal) {
+  if (modal) modal.hidden = false;
+}
+
+function closeModal(modal) {
+  if (modal) modal.hidden = true;
+}
+
+function setAdminUi(isAdmin) {
+  state.isAdmin = isAdmin;
+  adminLoginButton.hidden = isAdmin;
+  adminSessionTools.hidden = !isAdmin;
+}
+
+function formatDate(value) {
+  return value ? new Intl.DateTimeFormat('ko-KR', {
+    timeZone: 'Asia/Seoul', dateStyle: 'medium', timeStyle: 'short',
+  }).format(new Date(value)) : '';
+}
+
+function renderNotifications(items = []) {
+  notificationList.replaceChildren();
+  const unread = items.filter((item) => !item.read_at).length;
+  notificationCount.textContent = String(unread);
+  notificationCount.hidden = unread === 0;
+  if (!items.length) {
+    notificationList.append(createText('li', '새 알림이 없습니다.', 'empty-state'));
+    return;
+  }
+  items.forEach((item) => {
+    const entry = document.createElement('li');
+    entry.className = 'notification-item';
+    entry.append(createText('strong', item.title || '알림'));
+    entry.append(createText('p', item.body || ''));
+    entry.append(createText('small', formatDate(item.created_at)));
+    notificationList.append(entry);
+  });
+}
+
+async function loadNotifications() {
+  if (!state.isAdmin) return;
+  const payload = await apiRequest('/api/admin/notifications');
+  renderNotifications(payload.items || []);
+}
+
+async function loadDriveStatus() {
+  if (!state.isAdmin) return;
+  const payload = await apiRequest('/api/admin/drive/status');
+  driveConnectionStatus.textContent = payload.connected
+    ? '연결됨' : '연결되지 않음';
+}
+
+function renderBackups(items = []) {
+  backupList.replaceChildren();
+  backupListStatus.textContent = items.length + '개';
+  if (!items.length) {
+    backupList.append(createText('li', '백업 파일이 없습니다.', 'empty-state'));
+    return;
+  }
+  items.forEach((item) => {
+    const entry = document.createElement('li');
+    entry.className = 'backup-item';
+    const info = document.createElement('div');
+    info.className = 'backup-item-info';
+    info.append(createText('strong', item.file_name || 'backup.json'));
+    info.append(createText('small', (item.mode === 'auto' ? '자동' : '수동') + ' · ' + formatDate(item.created_at)));
+    const actions = document.createElement('div');
+    actions.className = 'backup-item-actions';
+    [['download', '다운로드'], ['restore', '복원']].forEach(([action, label]) => {
+      const button = createText('button', label, 'btn btn-outline-secondary');
+      button.type = 'button';
+      button.dataset.backupAction = action;
+      button.dataset.backupId = item.id;
+      actions.append(button);
+    });
+    entry.append(info, actions);
+    backupList.append(entry);
+  });
+}
+
+async function loadBackups() {
+  if (!state.isAdmin) return;
+  const payload = await apiRequest('/api/admin/backups');
+  renderBackups(payload.items || []);
+}
+
+async function loadAdminPanel() {
+  await Promise.all([loadNotifications(), loadDriveStatus(), loadBackups()]);
+}
+
+async function createBackup(mode) {
+  backupStatus.textContent = mode === 'auto' ? '자동 백업 중…' : '수동 백업 중…';
+  try {
+    await apiRequest('/api/admin/backups', {
+      method: 'POST',
+      body: JSON.stringify({ mode }),
+    });
+    backupStatus.textContent = '백업이 완료되었습니다.';
+    await Promise.all([loadBackups(), loadNotifications()]);
+    return true;
+  } catch (error) {
+    backupStatus.textContent = error.message;
+    return false;
+  }
+}
+
+function kstParts() {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Seoul', year: 'numeric', month: '2-digit',
+    day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false,
+  }).formatToParts(new Date());
+  return Object.fromEntries(parts.filter((part) => part.type !== 'literal').map((part) => [part.type, part.value]));
+}
+
+async function checkAutoBackup() {
+  if (!state.isAdmin || document.visibilityState !== 'visible') return;
+  const parts = kstParts();
+  const hour = Number(parts.hour) % 24;
+  if (![0, 8, 16].includes(hour) || Number(parts.minute) > 1) return;
+  const slot = parts.year + '-' + parts.month + '-' + parts.day + '-' + String(hour).padStart(2, '0');
+  if (state.autoBackupSlot === slot || sessionStorage.getItem('portfolio-auto-backup-slot') === slot) return;
+  if (await createBackup('auto')) {
+    state.autoBackupSlot = slot;
+    sessionStorage.setItem('portfolio-auto-backup-slot', slot);
+  }
+}
+
+function startAdminScheduler() {
+  clearInterval(state.adminTimer);
+  clearInterval(state.notificationTimer);
+  if (!state.isAdmin) return;
+  checkAutoBackup();
+  state.adminTimer = setInterval(checkAutoBackup, 30000);
+  state.notificationTimer = setInterval(() => loadNotifications().catch(() => {}), 30000);
+}
+
+async function verifyAdminSession(user) {
+  state.user = user;
+  try {
+    await apiRequest('/api/admin/notifications');
+    setAdminUi(true);
+    closeModal(adminLoginModal);
+    startAdminScheduler();
+    await loadAdminPanel();
+  } catch (error) {
+    setAdminUi(false);
+    await window.firebase.auth().signOut();
+    adminLoginStatus.textContent = error.message || '관리자 권한을 확인하지 못했습니다.';
+  }
+}
+
+function setupFirebaseAuth() {
+  if (!window.firebase || !window.PORTFOLIO_CONFIG?.firebase?.apiKey) return;
+  window.firebase.initializeApp(window.PORTFOLIO_CONFIG.firebase);
+  window.firebase.auth().setPersistence(window.firebase.auth.Auth.Persistence.LOCAL).catch(() => {});
+  window.firebase.auth().onAuthStateChanged((user) => {
+    if (user) verifyAdminSession(user);
+    else {
+      state.user = null;
+      setAdminUi(false);
+      clearInterval(state.adminTimer);
+      clearInterval(state.notificationTimer);
+    }
+  });
+}
+
+async function downloadBackup(id) {
+  const token = state.user ? await state.user.getIdToken() : '';
+  const response = await fetch(apiBase + '/api/admin/backups/' + encodeURIComponent(id) + '/download', {
+    headers: { Authorization: 'Bearer ' + token },
+  });
+  if (!response.ok) throw new Error('백업 다운로드에 실패했습니다.');
+  const blob = await response.blob();
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement('a');
+  anchor.href = url;
+  anchor.download = 'portfolio-backup.json';
+  anchor.click();
+  URL.revokeObjectURL(url);
+}
+
+function bindAdminActions() {
+  adminLoginForm?.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    if (!window.firebase) {
+      adminLoginStatus.textContent = 'Firebase 로그인 모듈을 불러오지 못했습니다.';
+      return;
+    }
+    adminLoginStatus.textContent = '로그인 중…';
+    const data = new FormData(adminLoginForm);
+    try {
+      await window.firebase.auth().signInWithEmailAndPassword(String(data.get('email')), String(data.get('password')));
+      adminLoginForm.reset();
+    } catch {
+      adminLoginStatus.textContent = '이메일 또는 비밀번호를 확인해주세요.';
+    }
+  });
+  document.addEventListener('visibilitychange', checkAutoBackup);
+}
+
 function bindCommunityActions() {
   guestbookForm?.addEventListener('submit', async (event) => {
     event.preventDefault();
@@ -353,8 +571,43 @@ document.addEventListener('click', (event) => {
     chatPanel.hidden = true;
     window.clearInterval(state.chatTimer);
   }
-  if (action === 'admin-login') {
-    window.alert('관리자 로그인은 서버 연결 후 제공됩니다.');
+  if (action === 'admin-login') openModal(adminLoginModal);
+  if (action === 'close-login') closeModal(adminLoginModal);
+  if (action === 'settings') {
+    openModal(settingsModal);
+    loadAdminPanel().catch((error) => { backupStatus.textContent = error.message; });
+  }
+  if (action === 'close-settings') closeModal(settingsModal);
+  if (action === 'notifications') {
+    notificationCenter.hidden = !notificationCenter.hidden;
+    if (!notificationCenter.hidden) loadNotifications().catch(() => {});
+  }
+  if (action === 'close-notifications') notificationCenter.hidden = true;
+  if (action === 'admin-logout') window.firebase?.auth().signOut();
+  if (action === 'backup-now') createBackup('manual');
+  if (action === 'drive-connect') {
+    apiRequest('/api/admin/drive/start', { headers: { Accept: 'application/json' } })
+      .then((payload) => { window.location.href = payload.authorizationUrl; })
+      .catch((error) => { driveConnectionStatus.textContent = error.message; });
+  }
+  if (action === 'drive-disconnect') {
+    if (window.confirm('Google Drive 연결을 끊을까요? 백업 파일은 삭제되지 않습니다.')) {
+      apiRequest('/api/admin/drive/disconnect', { method: 'POST' })
+        .then(loadDriveStatus)
+        .catch((error) => { driveConnectionStatus.textContent = error.message; });
+    }
+  }
+  const backupButton = event.target.closest('[data-backup-action]');
+  if (backupButton) {
+    const id = encodeURIComponent(backupButton.dataset.backupId);
+    if (backupButton.dataset.backupAction === 'download') {
+      downloadBackup(id).catch((error) => { backupStatus.textContent = error.message; });
+    }
+    if (backupButton.dataset.backupAction === 'restore' && window.confirm('선택한 백업으로 공유 데이터를 복원할까요? 현재 데이터가 교체됩니다.')) {
+      apiRequest('/api/admin/backups/' + id + '/restore', { method: 'POST' })
+        .then(loadCommunity)
+        .catch((error) => { backupStatus.textContent = error.message; });
+    }
   }
 });
 
@@ -367,8 +620,10 @@ updatePage();
 initTheme();
 bindNameShuffle();
 bindCommunityActions();
+bindAdminActions();
 loadCommunity();
 startGalleryLoop();
+setupFirebaseAuth();
 
 const loadingInterval = window.setInterval(shuffleLoadingFont, 300);
 window.setTimeout(() => {
