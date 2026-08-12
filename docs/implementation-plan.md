@@ -634,10 +634,10 @@ The old value may remain in immutable Git history, but it is unusable after revo
 #### 저장·외부 서비스
 
 - Firebase Authentication은 계정·Provider·익명 세션의 원천이다.
-- Firebase DB는 계정별 활동 이벤트의 즉시 저장소로 사용한다.
+- Firebase Firestore REST는 `FIRESTORE_SERVICE_ACCOUNT_JSON` Secret이 설정된 경우 계정별 활동 이벤트의 실시간 외부 저장소로 사용한다.
 - Cloudflare Worker는 인증·권한·이벤트 기록·백업 API의 단일 경계다.
-- D1은 세션, 관리자 상태, 백업 manifest/checksum, 재시도 상태를 저장한다.
-- R2는 매일 생성되는 활동 snapshot을 보관한다.
+- D1은 이벤트 원장, 세션, 관리자 상태, 백업 payload/checksum을 저장하는 Cloudflare 백업 저장소다.
+- Firestore가 일시적으로 실패해도 D1 원장 기록은 유지하고 비밀값 없는 오류 코드만 로그에 남긴다.
 
 #### 의존성 연결
 
@@ -666,6 +666,8 @@ Gate: 문서 선커밋, 비밀값 없음, main 미변경.
 #### Phase 21-B — 이메일·Google·익명 인증
 
 - 이메일 로그인 오류를 Firebase 원문이 아닌 안전한 오류 코드로 변환한다.
+- `/api/auth/guest`가 Firebase 익명 계정을 만들고 HttpOnly 세션을 발급한다.
+- `/api/auth/member/login`과 Google callback의 비관리자 계정은 member 세션으로 정규화한다.
 - Google OAuth state, callback, Firebase Provider 연결, 세션 발급을 검증한다.
 - 익명·일반 인증은 방문자 역할로 정규화한다.
 
@@ -681,17 +683,17 @@ Gate: 다른 UID가 같은 이메일을 주장해도 거부, 이메일 미검증
 
 #### Phase 21-D — 활동 이벤트
 
-- Firebase DB에 계정별 이벤트를 즉시 기록한다.
+- Firestore REST가 설정되면 계정별 이벤트를 즉시 기록하고, 항상 D1 `activity_events` 원장에도 저장한다.
 - 이벤트 쓰기는 UID/게스트 식별자 범위를 강제하고, 민감한 원문을 제거한다.
-- Firestore Rules 또는 Worker 검증으로 타 계정 이벤트 조회·수정을 차단한다.
+- 클라이언트에는 이벤트 조회 API를 제공하지 않고 Worker만 기록하므로 타 계정 이벤트 노출을 차단한다.
 
 Gate: 관리자·회원·게스트 각각의 이벤트 저장, 계정 격리, 중복 event ID 무시, 실패 재시도.
 
 #### Phase 21-E — KST 20:00 백업
 
 - Cloudflare Cron은 UTC 11:00에 실행해 KST 20:00을 구현한다.
-- Firebase DB 이벤트를 기간별 snapshot으로 만들고 R2에 저장한다.
-- D1에 백업 시각, 범위, checksum, 상태, 재시도 횟수를 기록한다.
+- D1 `activity_events`를 최근 24시간 snapshot으로 만들고 `activity_backup_runs`에 payload와 checksum을 저장한다.
+- 동일한 날짜 ID로 재실행해도 `INSERT OR REPLACE`로 멱등성을 유지한다.
 
 Gate: 수동 실행과 Cron 실행 결과 일치, checksum 검증, 재실행 멱등성, 실패 알림, 비밀정보 미포함.
 
