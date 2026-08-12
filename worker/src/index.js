@@ -992,6 +992,14 @@ async function startFirebaseGoogleLogin(env) {
   });
 }
 
+function firebaseAuthErrorCode(payload) {
+  const reason = String(payload?.error?.message || '');
+  if (reason.includes('INVALID_API_KEY') || reason.includes('API_KEY_INVALID')) return 'AUTH_NOT_CONFIGURED';
+  if (reason.includes('OPERATION_NOT_ALLOWED')) return 'AUTH_PROVIDER_DISABLED';
+  if (reason.includes('EMAIL_NOT_FOUND') || reason.includes('INVALID_PASSWORD') || reason.includes('USER_DISABLED')) return 'AUTH_FAILED';
+  return 'AUTH_SERVICE_ERROR';
+}
+
 async function finishFirebaseGoogleLogin(request, env) {
   const url = new URL(request.url);
   const state = url.searchParams.get('state') || '';
@@ -1036,6 +1044,9 @@ async function finishFirebaseGoogleLogin(request, env) {
   if (!firebaseResponse.ok) {
     const firebaseError = await firebaseResponse.json().catch(() => ({}));
     const reason = String(firebaseError.error?.message || '');
+    if (reason.includes('INVALID_API_KEY') || reason.includes('API_KEY_INVALID')) {
+      return oauthRedirect(env, 'admin-google-login-not-configured');
+    }
     if (reason.includes('EMAIL_EXISTS') || reason.includes('FEDERATED_USER_ID_ALREADY_LINKED')) {
       return oauthRedirect(env, 'admin-google-login-link-required');
     }
@@ -1094,7 +1105,11 @@ async function loginAdmin(request, env) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ email, password, returnSecureToken: true }),
     });
-    if (!response.ok) throw httpError('AUTH_FAILED', '이메일 또는 비밀번호를 확인해주세요.', 401);
+    if (!response.ok) {
+      const failure = await response.json().catch(() => ({}));
+      const code = firebaseAuthErrorCode(failure);
+      throw httpError(code, code === 'AUTH_FAILED' ? '이메일 또는 비밀번호를 확인해주세요.' : 'Firebase 로그인 설정을 확인해주세요.', code === 'AUTH_FAILED' ? 401 : 503);
+    }
     payload = await response.json();
   } catch (error) {
     if (error.code) throw error;
@@ -1140,7 +1155,11 @@ async function createAnonymousSession(request, env) {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ returnSecureToken: true }),
   });
-  if (!response.ok) throw httpError('AUTH_SERVICE_ERROR', 'Firebase 익명 로그인을 확인할 수 없습니다.', 503);
+  if (!response.ok) {
+    const failure = await response.json().catch(() => ({}));
+    const code = firebaseAuthErrorCode(failure);
+    throw httpError(code, 'Firebase 익명 로그인 설정을 확인해주세요.', 503);
+  }
   const payload = await response.json();
   const claims = await verifyFirebaseToken(payload.idToken, env);
   return createVisitorSession(payload, '', env, 'anonymous', claims);
