@@ -312,7 +312,17 @@
           <p class="modal-help">관리자 계정으로 로그인하면 설정·백업·알림 기능을 사용할 수 있습니다.</p>
           <form id="admin-login-form" class="admin-login-form">
             <label>이메일<input type="email" name="email" autocomplete="username" required></label>
-            <label>비밀번호<input type="password" name="password" autocomplete="current-password" required></label>
+            <label for="admin-password">비밀번호
+              <span class="password-input-group">
+                <input id="admin-password" type="password" name="password" autocomplete="current-password" required>
+                <button class="password-input-action" type="button" data-password-action="toggle" aria-label="비밀번호 표시" aria-pressed="false">
+                  <i class="bi bi-eye" aria-hidden="true"></i>
+                </button>
+                <button class="password-input-action" type="button" data-password-action="clear" aria-label="비밀번호 입력 삭제">
+                  <i class="bi bi-x-lg" aria-hidden="true"></i>
+                </button>
+              </span>
+            </label>
             <button class="btn btn-primary rounded-pill" type="submit">로그인 <i class="bi bi-box-arrow-in-right" aria-hidden="true"></i></button>
             <p class="form-status" id="admin-login-status" role="status"></p>
           </form>
