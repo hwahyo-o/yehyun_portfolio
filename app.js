@@ -244,11 +244,46 @@ function renderGuestbook(items = []) {
   items.forEach((item) => {
     const entry = document.createElement('li');
     entry.className = 'guestbook-item';
-    entry.append(createText('time', item.date || item.createdAt || ''));
-    entry.append(createText('strong', item.name || 'Anonymous'));
-    entry.append(createText('p', item.content || ''));
+    const actions = document.createElement('div');
+    actions.className = 'guestbook-actions';
+    ['edit', 'delete'].forEach((action) => {
+      const button = createText('button', action === 'edit' ? '수정' : '삭제', 'btn btn-sm btn-outline-secondary');
+      button.type = 'button';
+      button.dataset.guestbookAction = action;
+      button.dataset.guestbookId = item.id;
+      actions.append(button);
+    });
+    entry.append(
+      createText('time', item.date || item.createdAt || ''),
+      createText('strong', item.name || 'Anonymous'),
+      createText('p', item.content || ''),
+      actions,
+    );
     guestbookList.append(entry);
   });
+}
+
+async function editGuestbookComment(id) {
+  const password = window.prompt('댓글 작성 시 입력한 비밀번호를 입력해주세요.');
+  if (password === null) return;
+  const content = window.prompt('수정할 내용을 입력해주세요.');
+  if (content === null || !content.trim()) return;
+  await apiRequest('/api/guestbook/' + encodeURIComponent(id), {
+    method: 'PATCH',
+    body: JSON.stringify({ password, content }),
+  });
+  await loadCommunity();
+}
+
+async function deleteGuestbookComment(id) {
+  const password = window.prompt('댓글 삭제를 위해 비밀번호를 입력해주세요.');
+  if (password === null) return;
+  if (!window.confirm('이 댓글을 삭제할까요?')) return;
+  await apiRequest('/api/guestbook/' + encodeURIComponent(id), {
+    method: 'DELETE',
+    body: JSON.stringify({ password }),
+  });
+  await loadCommunity();
 }
 
 async function loadCommunity() {
@@ -602,6 +637,14 @@ document.addEventListener('click', (event) => {
         .catch((error) => { driveConnectionStatus.textContent = error.message; });
     }
   }
+  const guestbookButton = event.target.closest('[data-guestbook-action]');
+  if (guestbookButton) {
+    const actionName = guestbookButton.dataset.guestbookAction;
+    const handler = actionName === 'edit' ? editGuestbookComment : deleteGuestbookComment;
+    handler(guestbookButton.dataset.guestbookId).catch((error) => window.alert(error.message));
+    return;
+  }
+
   const backupButton = event.target.closest('[data-backup-action]');
   if (backupButton) {
     const id = encodeURIComponent(backupButton.dataset.backupId);
