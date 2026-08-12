@@ -412,8 +412,7 @@ async function restoreBackup(env, backupId) {
     'DELETE FROM messages', 'DELETE FROM conversations',
     'DELETE FROM post_media', 'DELETE FROM posts', 'DELETE FROM updates',
     'DELETE FROM admin_notifications',
-  ].map((sql) => env.DB.prepare(sql)),
-  ];
+  ].map((sql) => env.DB.prepare(sql));
   rows('posts').forEach((row) => statements.push(env.DB.prepare('INSERT INTO posts (id, type, title, description, body_html, is_private, status, content_path, published_at, created_at, updated_at, deleted_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)').bind(row.id, row.type, row.title, row.description || '', row.body_html || '', row.is_private || 0, row.status || 'draft', row.content_path || null, row.published_at || null, row.created_at, row.updated_at, row.deleted_at || null)));
   rows('post_media').forEach((row) => statements.push(env.DB.prepare('INSERT INTO post_media (id, post_id, file_name, mime_type, size_bytes, sha256, drive_file_id, content_url, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)').bind(row.id, row.post_id, row.file_name, row.mime_type, row.size_bytes || 0, row.sha256 || null, row.drive_file_id || null, row.content_url || null, row.created_at)));
   rows('updates').forEach((row) => statements.push(env.DB.prepare('INSERT INTO updates (id, title, description, published_at, created_at, deleted_at) VALUES (?, ?, ?, ?, ?, ?)').bind(row.id, row.title, row.description || '', row.published_at, row.created_at, row.deleted_at || null)));
