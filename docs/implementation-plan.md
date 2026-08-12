@@ -838,3 +838,30 @@ Gate: 모든 CI 성공, 브라우저 console에 미해결 오류 없음, 실제 
 - 세션 키 파서가 약한 임의 문자열을 허용하지 않음
 - Firebase API key·Provider 오류가 서버 500 대신 안전한 503/401 계열 코드로 반환됨
 - Pages와 Worker 배포 후 운영 화면에서 이메일·Google 로그인을 직접 확인
+
+
+## 27. 2026-08-12 인증 무한 대기·Provider 오류 개선 Phase
+
+### 확정 관찰
+
+- 로그인 화면의 `로그인 중…` 상태는 API fetch에 timeout이 없어 Worker 또는 Firebase upstream 지연 시 무기한 유지될 수 있다.
+- Google callback은 Provider·API key·Redirect URI·계정 연결·세션 저장 오류를 세분화하지 못하면 동일한 provider 오류로 표시될 수 있다.
+- `/api/auth/session`의 401은 세션이 없는 초기 상태에서 정상이다.
+- CSP `frame-ancestors` meta 경고와 jsDelivr source map 차단은 인증 API의 직접 원인이 아니다.
+
+### 구현 범위
+
+- 화면 API client에 15초 timeout과 `REQUEST_TIMEOUT` 메시지를 추가한다.
+- 이메일 로그인 중복 제출을 막고 timeout·실패·성공 모든 경로에서 버튼 상태를 복구한다.
+- Worker 외부 Firebase/Google 요청에 10초 timeout을 추가하고 안전한 `AUTH_UPSTREAM_TIMEOUT`으로 변환한다.
+- Firestore 활동 기록은 D1 세션 발급 응답을 막지 않도록 `waitUntil`로 분리한다.
+- Google callback은 Provider 비활성화, API key 설정, upstream timeout, 토큰 검증, 세션 저장 fragment를 구분한다.
+
+### Gate
+
+- 계획 문서 선커밋
+- app.js와 Worker 정적 문법·Secret 패턴 검증 성공
+- timeout 발생 시 화면이 무한 대기하지 않음
+- 인증 성공 시 Firestore 지연이 세션 발급을 막지 않음
+- Google 오류가 안전한 단계별 메시지로 표시됨
+- 실제 계정 로그인은 운영자가 배포 후 화면에서 확인
