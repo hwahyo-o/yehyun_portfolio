@@ -1312,7 +1312,7 @@ async function verifyFirebaseToken(token, env) {
   if (!env.FIREBASE_WEB_API_KEY) {
     throw httpError('AUTH_NOT_CONFIGURED', 'Firebase 인증 설정이 필요합니다.', 503);
   }
-  const response = await fetch(
+  const response = await fetchWithTimeout(
     'https://identitytoolkit.googleapis.com/v1/accounts:lookup?key=' + encodeURIComponent(env.FIREBASE_WEB_API_KEY),
     {
       method: 'POST',
