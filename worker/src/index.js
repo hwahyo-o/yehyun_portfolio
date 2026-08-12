@@ -34,6 +34,42 @@ async function route(request, env) {
         ? listMessages(env, conversationId)
         : createMessage(request, env, conversationId);
     }
+    if (url.pathname === '/api/events' && request.method === 'POST') return recordPublicEvent(request, env);
+    if (url.pathname === '/api/guestbook/' && request.method === 'PATCH') return json({ error: { code: 'NOT_FOUND', message: '방명록을 찾을 수 없습니다.' } }, 404);
+    if (url.pathname.startsWith('/api/guestbook/') && ['PATCH', 'DELETE'].includes(request.method)) {
+      const commentId = url.pathname.split('/').pop();
+      return request.method === 'PATCH'
+        ? updateGuestbook(request, env, commentId)
+        : deleteGuestbook(request, env, commentId);
+    }
+    if (url.pathname === '/api/admin/drive/status' && request.method === 'GET') {
+      await requireAdmin(request, env);
+      return getDriveStatus(env);
+    }
+    if (url.pathname === '/api/admin/drive/disconnect' && request.method === 'POST') {
+      await requireAdmin(request, env);
+      return disconnectDrive(env);
+    }
+    if (url.pathname === '/api/admin/notifications' && request.method === 'GET') {
+      await requireAdmin(request, env);
+      return listAdminNotifications(env);
+    }
+    if (url.pathname === '/api/admin/backups' && request.method === 'GET') {
+      await requireAdmin(request, env);
+      return listBackups(env);
+    }
+    if (url.pathname === '/api/admin/backups' && request.method === 'POST') {
+      await requireAdmin(request, env);
+      return createBackup(request, env);
+    }
+    if (url.pathname.startsWith('/api/admin/backups/') && url.pathname.endsWith('/download') && request.method === 'GET') {
+      await requireAdmin(request, env);
+      return downloadBackup(env, url.pathname.split('/')[4]);
+    }
+    if (url.pathname.startsWith('/api/admin/backups/') && url.pathname.endsWith('/restore') && request.method === 'POST') {
+      await requireAdmin(request, env);
+      return restoreBackup(env, url.pathname.split('/')[4]);
+    }
     if (url.pathname.startsWith('/api/admin/')) {
       await requireAdmin(request, env);
       return json({ error: { code: 'ADMIN_WRITE_PENDING', message: '관리자 CMS 연결 단계입니다.' } }, 501);
@@ -89,7 +125,34 @@ async function createGuestbook(request, env) {
   const now = new Date().toISOString();
   await env.DB.prepare('INSERT INTO guestbook_comments (id, name, password_salt, password_hash, content, created_at) VALUES (?, ?, ?, ?, ?, ?)')
     .bind(id, name, encode(salt), hash, content, now).run();
+  await recordNotification(env, 'guestbook', 'Guestbook 새 댓글', name + '님이 Guestbook에 댓글을 남겼습니다.', id);
   return json({ item: { id, name, content, date: now } }, 201);
+}
+
+async function readGuestbookPassword(row, password) {
+  if (!row || typeof password !== 'string' || password.length < 4 || password.length > 64) return false;
+  const hash = await hashPassword(password, decodeBytes(row.password_salt));
+  return safeEqual(hash, row.password_hash);
+}
+
+async function updateGuestbook(request, env, commentId) {
+  if (!isSafeId(commentId)) return json({ error: { code: 'INVALID_ID', message: '방명록 ID가 올바르지 않습니다.' } }, 400);
+  const body = await request.json();
+  const row = await env.DB.prepare('SELECT password_salt, password_hash FROM guestbook_comments WHERE id = ? AND deleted_at IS NULL').bind(commentId).first();
+  if (!await readGuestbookPassword(row, String(body.password || ''))) return json({ error: { code: 'PASSWORD_MISMATCH', message: '비밀번호가 일치하지 않습니다.' } }, 403);
+  const content = cleanText(body.content, 1000);
+  if (!content) return json({ error: { code: 'INVALID_INPUT', message: '내용을 입력해주세요.' } }, 400);
+  await env.DB.prepare('UPDATE guestbook_comments SET content = ? WHERE id = ?').bind(content, commentId).run();
+  return json({ ok: true });
+}
+
+async function deleteGuestbook(request, env, commentId) {
+  if (!isSafeId(commentId)) return json({ error: { code: 'INVALID_ID', message: '방명록 ID가 올바르지 않습니다.' } }, 400);
+  const body = await request.json();
+  const row = await env.DB.prepare('SELECT password_salt, password_hash FROM guestbook_comments WHERE id = ? AND deleted_at IS NULL').bind(commentId).first();
+  if (!await readGuestbookPassword(row, String(body.password || ''))) return json({ error: { code: 'PASSWORD_MISMATCH', message: '비밀번호가 일치하지 않습니다.' } }, 403);
+  await env.DB.prepare('UPDATE guestbook_comments SET deleted_at = ? WHERE id = ?').bind(new Date().toISOString(), commentId).run();
+  return json({ ok: true });
 }
 
 async function listMessages(env, conversationId) {
@@ -109,6 +172,7 @@ async function createMessage(request, env, conversationId) {
     env.DB.prepare('INSERT INTO messages (id, conversation_id, sender, content, created_at) VALUES (?, ?, \'visitor\', ?, ?)').bind(crypto.randomUUID(), conversationId, content, now),
     env.DB.prepare('UPDATE conversations SET updated_at = ? WHERE id = ?').bind(now, conversationId),
   ]);
+  await recordNotification(env, 'dm', 'Direct Message 새 문의', '방문자가 새 메시지를 보냈습니다.', conversationId);
   return json({ ok: true }, 201);
 }
 
@@ -129,7 +193,9 @@ async function startGoogleDriveOAuth(request, env) {
     scope: 'https://www.googleapis.com/auth/drive.file',
     state,
   });
-  return new Response(null, { status: 302, headers: { Location: `https://accounts.google.com/o/oauth2/v2/auth?${params}` } });
+  const authorizationUrl = 'https://accounts.google.com/o/oauth2/v2/auth?' + params.toString();
+  if ((request.headers.get('Accept') || '').includes('application/json')) return json({ authorizationUrl });
+  return new Response(null, { status: 302, headers: { Location: authorizationUrl } });
 }
 
 async function finishGoogleDriveOAuth(request, env) {
@@ -180,6 +246,187 @@ async function decryptSecret(ciphertext, iv, encodedKey) {
   const key = await crypto.subtle.importKey('raw', decodeBytes(encodedKey), 'AES-GCM', false, ['decrypt']);
   const plaintext = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: decodeBytes(iv) }, key, decodeBytes(ciphertext));
   return new TextDecoder().decode(plaintext);
+}
+
+async function getDriveStatus(env) {
+  const connection = await env.DB.prepare('SELECT google_subject, updated_at FROM google_drive_connections WHERE id = ?').bind('primary').first();
+  return json({ connected: Boolean(connection), updatedAt: connection?.updated_at || null });
+}
+
+async function disconnectDrive(env) {
+  await env.DB.prepare('DELETE FROM google_drive_connections WHERE id = ?').bind('primary').run();
+  return json({ ok: true });
+}
+
+async function listAdminNotifications(env) {
+  const result = await env.DB.prepare('SELECT id, type, title, body, entity_id, created_at, read_at FROM admin_notifications ORDER BY created_at DESC LIMIT 50').all();
+  return json({ items: result.results || [] });
+}
+
+async function listBackups(env) {
+  const result = await env.DB.prepare('SELECT id, mode, file_name, size_bytes, created_at, restored_at FROM backups ORDER BY created_at DESC LIMIT 50').all();
+  return json({ items: result.results || [] });
+}
+
+async function recordNotification(env, type, title, body, entityId = null) {
+  await env.DB.prepare('INSERT INTO admin_notifications (id, type, title, body, entity_id, created_at) VALUES (?, ?, ?, ?, ?, ?)')
+    .bind(crypto.randomUUID(), type, title, body, entityId, new Date().toISOString()).run();
+}
+
+async function recordPublicEvent(request, env) {
+  const body = await request.json();
+  const type = ['share', 'reaction'].includes(body.type) ? body.type : '';
+  if (!type) return json({ error: { code: 'INVALID_INPUT', message: '이벤트 종류가 올바르지 않습니다.' } }, 400);
+  await recordNotification(
+    env,
+    type,
+    type === 'share' ? '게시물 공유 알림' : '게시물 반응 알림',
+    type === 'share' ? '방문자가 게시물을 공유했습니다.' : '방문자가 게시물에 반응을 남겼습니다.',
+    cleanText(body.postId, 100),
+  );
+  return json({ ok: true }, 201);
+}
+
+async function snapshotTable(env, table) {
+  const result = await env.DB.prepare('SELECT * FROM ' + table).all();
+  return result.results || [];
+}
+
+async function createBackup(request, env) {
+  const body = await request.json().catch(() => ({}));
+  const mode = body.mode === 'auto' ? 'auto' : 'manual';
+  const connection = await env.DB.prepare('SELECT id FROM google_drive_connections WHERE id = ?').bind('primary').first();
+  if (!connection) throw httpError('DRIVE_NOT_CONNECTED', '먼저 Google Drive를 연결해주세요.', 409);
+  const snapshot = {
+    schemaVersion: 2,
+    timezone: 'Asia/Seoul',
+    createdAt: new Date().toISOString(),
+    data: {
+      posts: await snapshotTable(env, 'posts'),
+      post_media: await snapshotTable(env, 'post_media'),
+      updates: await snapshotTable(env, 'updates'),
+      guestbook_comments: await snapshotTable(env, 'guestbook_comments'),
+      guestbook_replies: await snapshotTable(env, 'guestbook_replies'),
+      conversations: await snapshotTable(env, 'conversations'),
+      messages: await snapshotTable(env, 'messages'),
+      admin_notifications: await snapshotTable(env, 'admin_notifications'),
+    },
+  };
+  const payload = JSON.stringify(snapshot);
+  const token = await getDriveAccessToken(env);
+  const rootId = await getOrCreateDriveFolder(token, 'Portfolio-con');
+  const backupRootId = await getOrCreateDriveFolder(token, 'Backups', rootId);
+  const dateFolder = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Seoul' }).format(new Date());
+  const dateFolderId = await getOrCreateDriveFolder(token, dateFolder, backupRootId);
+  const timestamp = new Intl.DateTimeFormat('sv-SE', {
+    timeZone: 'Asia/Seoul', year: 'numeric', month: '2-digit', day: '2-digit',
+    hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false,
+  }).format(new Date()).replace(' ', '_').replaceAll(':', '-');
+  const fileName = 'portfolio_' + mode + '_' + timestamp + '_KST.json';
+  const file = await uploadDriveJson(token, fileName, payload, dateFolderId);
+  const now = new Date().toISOString();
+  const id = crypto.randomUUID();
+  await env.DB.prepare('INSERT INTO backups (id, mode, file_name, drive_file_id, drive_folder_id, size_bytes, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)')
+    .bind(id, mode, fileName, file.id, dateFolderId, new TextEncoder().encode(payload).byteLength, now).run();
+  await recordNotification(env, 'backup', '백업 완료', fileName + ' 백업이 완료되었습니다.', id);
+  return json({ item: { id, mode, file_name: fileName, created_at: now } }, 201);
+}
+
+async function findDriveFolder(token, name, parentId = null) {
+  const q = ["name = '" + name.replaceAll("'", "\\'") + "'", "mimeType = 'application/vnd.google-apps.folder'", 'trashed = false'];
+  if (parentId) q.push("'" + parentId + "' in parents");
+  const url = 'https://www.googleapis.com/drive/v3/files?' + new URLSearchParams({ q: q.join(' and '), pageSize: '1', fields: 'files(id,name)' });
+  const response = await fetch(url, { headers: { Authorization: 'Bearer ' + token } });
+  if (!response.ok) throw httpError('DRIVE_FOLDER_READ_FAILED', 'Google Drive 폴더를 확인하지 못했습니다.', 502);
+  const payload = await response.json();
+  return payload.files?.[0]?.id || null;
+}
+
+async function getOrCreateDriveFolder(token, name, parentId = null) {
+  const existing = await findDriveFolder(token, name, parentId);
+  if (existing) return existing;
+  const metadata = { name, mimeType: 'application/vnd.google-apps.folder' };
+  if (parentId) metadata.parents = [parentId];
+  const response = await fetch('https://www.googleapis.com/drive/v3/files', {
+    method: 'POST',
+    headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' },
+    body: JSON.stringify(metadata),
+  });
+  if (!response.ok) throw httpError('DRIVE_FOLDER_CREATE_FAILED', 'Google Drive 폴더를 생성하지 못했습니다.', 502);
+  const payload = await response.json();
+  return payload.id;
+}
+
+async function uploadDriveJson(token, fileName, payload, parentId) {
+  const boundary = 'portfolio_backup_boundary';
+  const body = [
+    '--' + boundary + '\r\n',
+    'Content-Type: application/json; charset=UTF-8\r\n\r\n',
+    JSON.stringify({ name: fileName, parents: [parentId], mimeType: 'application/json' }),
+    '\r\n--' + boundary + '\r\n',
+    'Content-Type: application/json\r\n\r\n',
+    payload,
+    '\r\n--' + boundary + '--',
+  ].join('');
+  const response = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart', {
+    method: 'POST',
+    headers: {
+      Authorization: 'Bearer ' + token,
+      'Content-Type': 'multipart/related; boundary=' + boundary,
+    },
+    body,
+  });
+  if (!response.ok) throw httpError('DRIVE_UPLOAD_FAILED', '백업 파일을 Google Drive에 저장하지 못했습니다.', 502);
+  return response.json();
+}
+
+async function downloadDriveJson(token, fileId) {
+  const response = await fetch('https://www.googleapis.com/drive/v3/files/' + encodeURIComponent(fileId) + '?alt=media', {
+    headers: { Authorization: 'Bearer ' + token },
+  });
+  if (!response.ok) throw httpError('DRIVE_DOWNLOAD_FAILED', '백업 파일을 불러오지 못했습니다.', 502);
+  return response.json();
+}
+
+async function downloadBackup(env, backupId) {
+  const row = await env.DB.prepare('SELECT file_name, drive_file_id FROM backups WHERE id = ?').bind(backupId).first();
+  if (!row) return json({ error: { code: 'NOT_FOUND', message: '백업을 찾을 수 없습니다.' } }, 404);
+  const token = await getDriveAccessToken(env);
+  const response = await fetch('https://www.googleapis.com/drive/v3/files/' + encodeURIComponent(row.drive_file_id) + '?alt=media', {
+    headers: { Authorization: 'Bearer ' + token },
+  });
+  if (!response.ok) throw httpError('DRIVE_DOWNLOAD_FAILED', '백업 파일을 다운로드하지 못했습니다.', 502);
+  const headers = new Headers({ 'Content-Type': 'application/json; charset=utf-8', 'Content-Disposition': 'attachment; filename="' + row.file_name + '"' });
+  return new Response(response.body, { status: 200, headers });
+}
+
+async function restoreBackup(env, backupId) {
+  const row = await env.DB.prepare('SELECT drive_file_id FROM backups WHERE id = ?').bind(backupId).first();
+  if (!row) return json({ error: { code: 'NOT_FOUND', message: '백업을 찾을 수 없습니다.' } }, 404);
+  const snapshot = await downloadDriveJson(await getDriveAccessToken(env), row.drive_file_id);
+  if (!snapshot || snapshot.schemaVersion !== 2 || !snapshot.data) throw httpError('INVALID_BACKUP', '복원할 수 없는 백업 파일입니다.', 400);
+  const data = snapshot.data;
+  const rows = (name) => Array.isArray(data[name]) ? data[name].slice(0, 10000) : [];
+  const statements = [
+    'DELETE FROM guestbook_replies', 'DELETE FROM guestbook_comments',
+    'DELETE FROM messages', 'DELETE FROM conversations',
+    'DELETE FROM post_media', 'DELETE FROM posts', 'DELETE FROM updates',
+    'DELETE FROM admin_notifications',
+  ].map((sql) => env.DB.prepare(sql)),
+  ];
+  rows('posts').forEach((row) => statements.push(env.DB.prepare('INSERT INTO posts (id, type, title, description, body_html, is_private, status, content_path, published_at, created_at, updated_at, deleted_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)').bind(row.id, row.type, row.title, row.description || '', row.body_html || '', row.is_private || 0, row.status || 'draft', row.content_path || null, row.published_at || null, row.created_at, row.updated_at, row.deleted_at || null)));
+  rows('post_media').forEach((row) => statements.push(env.DB.prepare('INSERT INTO post_media (id, post_id, file_name, mime_type, size_bytes, sha256, drive_file_id, content_url, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)').bind(row.id, row.post_id, row.file_name, row.mime_type, row.size_bytes || 0, row.sha256 || null, row.drive_file_id || null, row.content_url || null, row.created_at)));
+  rows('updates').forEach((row) => statements.push(env.DB.prepare('INSERT INTO updates (id, title, description, published_at, created_at, deleted_at) VALUES (?, ?, ?, ?, ?, ?)').bind(row.id, row.title, row.description || '', row.published_at, row.created_at, row.deleted_at || null)));
+  rows('guestbook_comments').forEach((row) => statements.push(env.DB.prepare('INSERT INTO guestbook_comments (id, name, password_salt, password_hash, content, created_at, deleted_at) VALUES (?, ?, ?, ?, ?, ?, ?)').bind(row.id, row.name, row.password_salt, row.password_hash, row.content, row.created_at, row.deleted_at || null)));
+  rows('guestbook_replies').forEach((row) => statements.push(env.DB.prepare('INSERT INTO guestbook_replies (id, comment_id, content, created_at, deleted_at) VALUES (?, ?, ?, ?, ?)').bind(row.id, row.comment_id, row.content, row.created_at, row.deleted_at || null)));
+  rows('conversations').forEach((row) => statements.push(env.DB.prepare('INSERT INTO conversations (id, created_at, updated_at) VALUES (?, ?, ?)').bind(row.id, row.created_at, row.updated_at)));
+  rows('messages').forEach((row) => statements.push(env.DB.prepare('INSERT INTO messages (id, conversation_id, sender, content, created_at) VALUES (?, ?, ?, ?, ?)').bind(row.id, row.conversation_id, row.sender, row.content, row.created_at)));
+  rows('admin_notifications').forEach((row) => statements.push(env.DB.prepare('INSERT INTO admin_notifications (id, type, title, body, entity_id, created_at, read_at) VALUES (?, ?, ?, ?, ?, ?, ?)').bind(row.id, row.type, row.title, row.body, row.entity_id || null, row.created_at, row.read_at || null)));
+  await env.DB.batch(statements);
+  const now = new Date().toISOString();
+  await env.DB.prepare('UPDATE backups SET restored_at = ? WHERE id = ?').bind(now, backupId).run();
+  await recordNotification(env, 'restore', '백업 복원 완료', '선택한 백업으로 데이터를 복원했습니다.', backupId);
+  return json({ ok: true, restoredAt: now });
 }
 
 async function streamDriveMedia(request, env, postId, mediaId) {
@@ -299,6 +546,15 @@ async function hashPassword(password, salt) {
   const material = await crypto.subtle.importKey('raw', new TextEncoder().encode(password), 'PBKDF2', false, ['deriveBits']);
   const bits = await crypto.subtle.deriveBits({ name: 'PBKDF2', salt, iterations: 120000, hash: 'SHA-256' }, material, 256);
   return encode(new Uint8Array(bits));
+}
+
+function safeEqual(left, right) {
+  const a = decodeBytes(left);
+  const b = decodeBytes(right);
+  if (a.length !== b.length) return false;
+  let result = 0;
+  a.forEach((value, index) => { result |= value ^ b[index]; });
+  return result === 0;
 }
 
 function encode(bytes) {
