@@ -16,6 +16,7 @@ const state = {
   lastShuffleAt: 0,
   galleryIndex: 0,
   chatTimer: null,
+  isAdmin: false,
 };
 
 const shell = document.querySelector('#site-shell');
@@ -197,15 +198,14 @@ function initTheme() {
 }
 
 async function authHeaders() {
-  const headers = { 'Content-Type': 'application/json' };
-  if (state.user) headers.Authorization = 'Bearer ' + await state.user.getIdToken();
-  return headers;
+  return { 'Content-Type': 'application/json' };
 }
 
 async function apiRequest(path, options = {}) {
   if (!apiBase) throw new Error('API가 설정되지 않았습니다.');
   const response = await fetch(apiBase + path, {
     ...options,
+    credentials: 'include',
     headers: { ...(await authHeaders()), ...(options.headers || {}) },
   });
   const payload = await response.json().catch(() => ({}));
@@ -490,40 +490,32 @@ function startAdminScheduler() {
   state.notificationTimer = setInterval(() => loadNotifications().catch(() => {}), 30000);
 }
 
-async function verifyAdminSession(user) {
-  state.user = user;
+async function verifyAdminSession() {
   try {
-    await apiRequest('/api/admin/notifications');
+    await apiRequest('/api/auth/session');
     setAdminUi(true);
     closeModal(adminLoginModal);
     startAdminScheduler();
     await loadAdminPanel();
-  } catch (error) {
+  } catch {
     setAdminUi(false);
-    await window.firebase.auth().signOut();
-    adminLoginStatus.textContent = error.message || '관리자 권한을 확인하지 못했습니다.';
+    clearInterval(state.adminTimer);
+    clearInterval(state.notificationTimer);
   }
 }
 
-function setupFirebaseAuth() {
-  if (!window.firebase || !window.PORTFOLIO_CONFIG?.firebase?.apiKey) return;
-  window.firebase.initializeApp(window.PORTFOLIO_CONFIG.firebase);
-  window.firebase.auth().setPersistence(window.firebase.auth.Auth.Persistence.LOCAL).catch(() => {});
-  window.firebase.auth().onAuthStateChanged((user) => {
-    if (user) verifyAdminSession(user);
-    else {
-      state.user = null;
-      setAdminUi(false);
-      clearInterval(state.adminTimer);
-      clearInterval(state.notificationTimer);
-    }
-  });
+async function setupAuthSession() {
+  if (!apiBase) return;
+  try {
+    await verifyAdminSession();
+  } catch {
+    setAdminUi(false);
+  }
 }
 
 async function downloadBackup(id) {
-  const token = state.user ? await state.user.getIdToken() : '';
   const response = await fetch(apiBase + '/api/admin/backups/' + encodeURIComponent(id) + '/download', {
-    headers: { Authorization: 'Bearer ' + token },
+    credentials: 'include',
   });
   if (!response.ok) throw new Error('백업 다운로드에 실패했습니다.');
   const blob = await response.blob();
@@ -538,15 +530,18 @@ async function downloadBackup(id) {
 function bindAdminActions() {
   adminLoginForm?.addEventListener('submit', async (event) => {
     event.preventDefault();
-    if (!window.firebase) {
-      adminLoginStatus.textContent = 'Firebase 로그인 모듈을 불러오지 못했습니다.';
-      return;
-    }
     adminLoginStatus.textContent = '로그인 중…';
     const data = new FormData(adminLoginForm);
     try {
-      await window.firebase.auth().signInWithEmailAndPassword(String(data.get('email')), String(data.get('password')));
+      await apiRequest('/api/auth/login', {
+        method: 'POST',
+        body: JSON.stringify({
+          email: String(data.get('email') || ''),
+          password: String(data.get('password') || ''),
+        }),
+      });
       adminLoginForm.reset();
+      await verifyAdminSession();
     } catch {
       adminLoginStatus.textContent = '이메일 또는 비밀번호를 확인해주세요.';
     }
@@ -637,7 +632,14 @@ document.addEventListener('click', (event) => {
     }
   }
   if (action === 'close-notifications') notificationCenter.hidden = true;
-  if (action === 'admin-logout') window.firebase?.auth().signOut();
+  if (action === 'admin-logout') {
+    apiRequest('/api/auth/logout', { method: 'POST' })
+      .finally(() => {
+        setAdminUi(false);
+        clearInterval(state.adminTimer);
+        clearInterval(state.notificationTimer);
+      });
+  }
   if (action === 'backup-now') createBackup('manual');
   if (action === 'drive-connect') {
     apiRequest('/api/admin/drive/start', { headers: { Accept: 'application/json' } })
@@ -685,7 +687,7 @@ bindCommunityActions();
 bindAdminActions();
 loadCommunity();
 startGalleryLoop();
-setupFirebaseAuth();
+setupAuthSession();
 
 const loadingInterval = window.setInterval(shuffleLoadingFont, 300);
 window.setTimeout(() => {
