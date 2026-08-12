@@ -14,8 +14,8 @@ python -m http.server
 
 ## 구조
 
-- index.html: 로딩 화면, GNB, GalleryHero, 작업물 rail, About/이력서, 카테고리 상세의 정적 화면 마크업
-- styles.css: 웹폰트, 레퍼런스 기반 색상·레이아웃·카드·반응형·모션
+- index.html: 로딩 화면, GNB, GalleryHero, 작업물 rail, About/이력서, 카테고리 상세의 정적 화면 마크업, Bootstrap 5.3.8 CSS와 Bootstrap Icons 연결
+- styles.css: 웹폰트, 레퍼런스 기반 색상·레이아웃·카드·반응형·모션, Bootstrap 기본값을 보완하는 고유 표현
 - app.js: 3초 로딩, 300ms 폰트 셔플, About Me 입력 제한, 해시 페이지 이동, 버튼 작동
 - public/: 파비콘과 YeHyun 로고 원본 자산
 - .github/workflows/deploy.yml: 정적 파일 GitHub Pages 배포
@@ -27,3 +27,12 @@ python -m http.server
 실제 이미지·영상은 아직 제공되지 않았습니다. 현재 작업물 영역은 추후 자산을 연결할 수 있는 명시적 슬롯으로 표시됩니다. 자산을 추가할 때에는 제목, 제작 기간, 설명, publishedAt, media 경로를 함께 연결하고 최신순 규칙을 유지합니다.
 
 비밀정보나 API 키는 코드와 문서에 기록하지 않습니다.
+
+## Bootstrap 연결 정책
+
+- Bootstrap 5.3.8 CSS와 Bootstrap Icons 1.13.1을 고정 버전 HTTPS CDN으로 연결합니다.
+- Bootstrap CSS는 기존 styles.css보다 먼저 로드하고, 기존 포트폴리오의 고유 레이아웃과 모션은 styles.css가 유지합니다.
+- GNB·View More·TOP·이전/다음의 기능성 화살표는 Bootstrap Icons를 사용합니다.
+- 로고·파비콘·Gallery 손/휴대폰·타원 장식은 기존 정적 자산과 CSS 표현을 유지합니다.
+- Bootstrap JavaScript, Popper, npm, React, Vite는 사용하지 않습니다.
+- Bootstrap CSS link에는 공식 SRI를 사용하며, Bootstrap Icons는 공식 CDN 고정 URL을 사용합니다.
