@@ -27,3 +27,7 @@ CREATE TABLE IF NOT EXISTS admin_notifications (
 
 CREATE INDEX IF NOT EXISTS idx_admin_notifications_created
   ON admin_notifications(created_at DESC);
+
+
+ALTER TABLE guestbook_replies ADD COLUMN author_type TEXT NOT NULL DEFAULT 'visitor';
+ALTER TABLE guestbook_replies ADD COLUMN author_name TEXT NOT NULL DEFAULT '';
