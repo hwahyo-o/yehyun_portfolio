@@ -170,9 +170,10 @@ function applyTheme(theme) {
   document.body.dataset.theme = nextTheme;
   window.localStorage.setItem('portfolio-theme', nextTheme);
   if (themeToggle) {
-    themeToggle.innerHTML = nextTheme === 'dark'
-      ? '<i class="bi bi-sun" aria-hidden="true"></i>'
-      : '<i class="bi bi-moon-stars" aria-hidden="true"></i>';
+    const icon = document.createElement('i');
+    icon.className = nextTheme === 'dark' ? 'bi bi-sun' : 'bi bi-moon-stars';
+    icon.setAttribute('aria-hidden', 'true');
+    themeToggle.replaceChildren(icon);
     themeToggle.setAttribute('aria-label', nextTheme === 'dark' ? 'Switch to light theme' : 'Switch to dark theme');
   }
 }
