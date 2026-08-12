@@ -1096,6 +1096,9 @@ async function loginAdmin(request, env) {
 }
 
 async function createAnonymousSession(request, env) {
+  if (!env.DB || !env.FIREBASE_WEB_API_KEY || !env.SESSION_ENCRYPTION_KEY) {
+    throw httpError('AUTH_NOT_CONFIGURED', '방문자 로그인을 사용할 수 없습니다.', 503);
+  }
   const existingToken = readCookie(request, 'portfolio_visitor_session');
   if (existingToken) {
     const existing = await env.DB.prepare('SELECT uid, email, provider FROM visitor_sessions WHERE id = ?').bind(await hashSessionToken(existingToken)).first();
