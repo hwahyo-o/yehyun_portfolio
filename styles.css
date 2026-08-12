@@ -1262,3 +1262,14 @@ body[data-theme="dark"] .admin-login-form input {
   .backup-item { grid-template-columns: 1fr; }
   .backup-item-actions { justify-content: flex-start; }
 }
+
+.guestbook-actions {
+  display: flex;
+  gap: 0.45rem;
+  margin-top: 0.7rem;
+}
+
+.guestbook-actions .btn {
+  font-size: 0.72rem;
+  letter-spacing: 0.04em;
+}
