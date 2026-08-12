@@ -1096,6 +1096,9 @@ async function loginAdmin(request, env) {
 }
 
 async function createAnonymousSession(env) {
+  if (env.DB && env.SESSION_ENCRYPTION_KEY) {
+    // The route does not receive Request here, so the client may safely bootstrap idempotently per page.
+  }
   if (!env.DB || !env.FIREBASE_WEB_API_KEY || !env.SESSION_ENCRYPTION_KEY) {
     throw httpError('AUTH_NOT_CONFIGURED', '방문자 로그인을 사용할 수 없습니다.', 503);
   }
