@@ -570,6 +570,7 @@ function handleGoogleLoginCallback() {
     'admin-google-login-success': 'Google 로그인에 성공했습니다.',
     'admin-google-login-forbidden': 'Google 계정이 관리자 권한으로 등록되지 않았습니다.',
     'admin-google-login-expired': 'Google 로그인 요청이 만료되었습니다. 다시 시도해주세요.',
+    'admin-google-login-link-required': '기존 Firebase 이메일 계정과 Google 계정 연결이 필요합니다. 먼저 이메일 로그인 계정에 Google 제공자를 연결해주세요.',
     'admin-google-login-error': 'Google 로그인에 실패했습니다. 설정을 확인해주세요.',
   };
   if (!messages[result]) return;
