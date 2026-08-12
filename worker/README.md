@@ -17,11 +17,11 @@ The Worker is not copied into the GitHub Pages artifact.
 1. Create a Cloudflare D1 database.
 2. Copy `wrangler.toml.example` to a local, ignored Wrangler configuration.
 3. Set the real D1 database ID locally.
-4. Apply `schema/001_initial.sql`.
+4. Apply `schema/001_initial.sql`, then `schema/002_admin_backups_notifications.sql`.
 5. Set the Google OAuth client ID, client secret, and refresh token as Worker secrets.
-6. Deploy the Worker.
+6. Deploy the Worker and complete the static/API verification gates.
 7. Set the public Worker URL in a non-secret static configuration value only after the URL exists.
-8. Configure Firebase Authentication and add the administrator UID to `admin_roles`.
+8. Only after the final migration and main-merge gate, configure Firebase Authentication and add the administrator UID to `admin_roles`.
 
 Never commit client secrets, refresh tokens, Firebase Admin credentials, Cloudflare API tokens, or GitHub tokens.
 
@@ -45,7 +45,7 @@ The repository code can be reviewed without credentials. Live deployment require
 
 ## D1 migration and administrator setup
 
-The `admin_roles` table is created by `schema/001_initial.sql`. If the D1 Console says `no such table: admin_roles`, the migration has not been applied yet.
+The `admin_roles` table is created by `schema/001_initial.sql`. If the D1 Console says `no such table: admin_roles`, the migration has not been applied yet. The table may exist before the final registration step; leave it empty until the implementation and deployment gates pass.
 
 In Cloudflare Dashboard:
 
@@ -60,21 +60,13 @@ INSERT INTO admin_roles (uid, email, created_at)
 VALUES ('YOUR_FIREBASE_ADMIN_UID', 'YOUR_ADMIN_EMAIL', datetime('now'));
 ```
 
-Do not add an administrator UID or email to the public repository. The value belongs in the private D1 database.
+Do not add an administrator UID or email to the public repository. The value belongs in the private D1 database, and the insert is intentionally deferred until the final gate.
 
 ## Creating GOOGLE_TOKEN_ENCRYPTION_KEY
 
 This secret is not a Firebase key and is not a Google OAuth client ID. It is a private 32-byte key used by the Worker to encrypt the Google Drive refresh token before storing it in D1.
 
-In PowerShell, run this locally:
-
-```powershell
-$bytes = New-Object byte[] 32
-[System.Security.Cryptography.RandomNumberGenerator]::Create().GetBytes($bytes)
-[Convert]::ToBase64String($bytes)
-```
-
-Copy the resulting single-line Base64 value directly into the Cloudflare Worker Secret named `GOOGLE_TOKEN_ENCRYPTION_KEY`. Do not commit it or send it in chat. Keep the same value permanently; changing it makes previously stored Drive refresh tokens unreadable.
+The value may be generated privately in advance and entered directly in Cloudflare; no local generation step is required during this implementation. The Worker requires this secret to decode to exactly 32 bytes when Base64-decoded. If the value already entered by the repository owner meets that condition, keep it unchanged. If it is human-readable, shorter, or was exposed outside the secret store, replace it before production. Do not commit it or send it in chat. Keep the final value permanently; changing it makes previously stored Drive refresh tokens unreadable.
 
 Also add `GOOGLE_CLIENT_SECRET` as a Worker Secret using the secret shown once by Google Cloud when the OAuth Web Client was created. Do not put it in `wrangler.toml`, GitHub, or the browser.
 
@@ -93,9 +85,9 @@ After administrator authentication is verified by the Worker, the static header 
 
 ## Migration order
 
-Apply both files in order to a new D1 database:
+Apply both files in order to a new D1 database. Do not insert an administrator row during this migration step:
 
 1. `worker/schema/001_initial.sql`
 2. `worker/schema/002_admin_backups_notifications.sql`
 
-For an existing database that already has `001_initial.sql`, apply only `002_admin_backups_notifications.sql`. Register the administrator UID in `admin_roles` only after all implementation gates have passed and the final production migration is complete.
+For an existing database that already has `001_initial.sql`, apply only `002_admin_backups_notifications.sql`. Register the administrator UID in `admin_roles` only after the implementation, Worker deployment, verification, and main-merge gates have passed.
