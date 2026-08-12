@@ -139,6 +139,10 @@ async function listAdminPosts(env) {
 
 async function createAdminPost(request, env, claims) {
   const { input, mediaFiles } = await readPostInput(request);
+  const totalUploadBytes = sourceByteLength(input) + mediaFiles.reduce((sum, item) => sum + item.sizeBytes, 0);
+  if (totalUploadBytes > 150 * 1024 * 1024) {
+    throw httpError('INVALID_MEDIA', '게시물 전체 용량은 150MB까지입니다.', 400);
+  }
   if (!env.GITHUB_CONTENT_TOKEN || !env.GITHUB_REPOSITORY) {
     throw httpError('CONTENT_PUBLISH_NOT_CONFIGURED', 'Content 배포 설정이 필요합니다.', 503);
   }
@@ -221,6 +225,12 @@ async function readPostInput(request) {
   return { input: validatePostInput(body), mediaFiles: validateMediaFiles(files) };
 }
 
+function sourceByteLength(input) {
+  return new TextEncoder().encode(input.html).byteLength
+    + new TextEncoder().encode(input.css).byteLength
+    + new TextEncoder().encode(input.js).byteLength;
+}
+
 function validateMediaFiles(files) {
   const imageFiles = files.filter((file) => String(file.type || '').toLowerCase().startsWith('image/'));
   const videoFiles = files.filter((file) => String(file.type || '').toLowerCase().startsWith('video/'));
@@ -248,7 +258,6 @@ function validateMediaFiles(files) {
   if (imageTotal > 100 * 1024 * 1024) throw httpError('INVALID_MEDIA', '이미지 전체 용량은 100MB까지입니다.', 400);
   if (videoTotal > 100 * 1024 * 1024) throw httpError('INVALID_MEDIA', '동영상 전체 용량은 100MB까지입니다.', 400);
   if (total > mediaLimit) throw httpError('INVALID_MEDIA', mixed ? '이미지와 동영상 혼합 업로드는 120MB까지입니다.' : '미디어 업로드는 100MB까지입니다.', 400);
-  if (total > 150 * 1024 * 1024) throw httpError('INVALID_MEDIA', '게시물 전체 용량은 150MB까지입니다.', 400);
   return result;
 }
 
@@ -335,8 +344,11 @@ function validatePostInput(body) {
   if (!type || !title || !html || html.length > 200000 || css.length > 200000 || js.length > 200000) {
     throw httpError('INVALID_INPUT', '게시물 정보 또는 파일 크기를 확인해주세요.', 400);
   }
-  if (html.length + css.length + js.length > 450000) {
-    throw httpError('INVALID_INPUT', '게시물 전체 파일 크기를 줄여주세요.', 400);
+  const sourceBytes = new TextEncoder().encode(html).byteLength
+    + new TextEncoder().encode(css).byteLength
+    + new TextEncoder().encode(js).byteLength;
+  if (sourceBytes > 150 * 1024 * 1024) {
+    throw httpError('INVALID_INPUT', '게시물 전체 용량은 150MB까지입니다.', 400);
   }
   assertRelativeAssetReferences(html, css, js);
   return { type, title, description, html, css, js, status, isPrivate, media };
