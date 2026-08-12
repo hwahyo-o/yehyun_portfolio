@@ -1012,23 +1012,30 @@ async function finishFirebaseGoogleLogin(request, env, ctx) {
   }
   await env.DB.prepare('DELETE FROM firebase_google_login_states WHERE state = ?').bind(state).run();
 
-  const tokenResponse = await fetchWithTimeout('https://oauth2.googleapis.com/token', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: new URLSearchParams({
-      client_id: env.GOOGLE_CLIENT_ID || '',
-      client_secret: env.GOOGLE_CLIENT_SECRET || '',
-      code,
-      grant_type: 'authorization_code',
-      redirect_uri: env.GOOGLE_LOGIN_REDIRECT_URI || '',
-    }),
-  });
+  let tokenResponse;
+  try {
+    tokenResponse = await fetchWithTimeout('https://oauth2.googleapis.com/token', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({
+        client_id: env.GOOGLE_CLIENT_ID || '',
+        client_secret: env.GOOGLE_CLIENT_SECRET || '',
+        code,
+        grant_type: 'authorization_code',
+        redirect_uri: env.GOOGLE_LOGIN_REDIRECT_URI || '',
+      }),
+    });
+  } catch (error) {
+    return oauthRedirect(env, googleErrorFragment(error.code));
+  }
   if (!tokenResponse.ok) return oauthRedirect(env, 'admin-google-login-oauth-error');
   const googleToken = await tokenResponse.json();
   if (!googleToken.id_token) return oauthRedirect(env, 'admin-google-login-oauth-error');
 
-  const firebaseResponse = await fetch(
-    'https://identitytoolkit.googleapis.com/v1/accounts:signInWithIdp?key=' + encodeURIComponent(env.FIREBASE_WEB_API_KEY || ''),
+  let firebaseResponse;
+  try {
+    firebaseResponse = await fetchWithTimeout(
+      'https://identitytoolkit.googleapis.com/v1/accounts:signInWithIdp?key=' + encodeURIComponent(env.FIREBASE_WEB_API_KEY || ''),
     {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -1040,7 +1047,10 @@ async function finishFirebaseGoogleLogin(request, env, ctx) {
         autoCreate: true,
       }),
     },
-  );
+    );
+  } catch (error) {
+    return oauthRedirect(env, googleErrorFragment(error.code));
+  }
   if (!firebaseResponse.ok) {
     const firebaseError = await firebaseResponse.json().catch(() => ({}));
     const reason = String(firebaseError.error?.message || '');
@@ -1083,6 +1093,9 @@ function googleErrorFragment(code) {
     SECRET_CONFIG_INVALID: 'admin-google-login-secret-error',
     SESSION_STORE_FAILED: 'admin-google-login-session-error',
     FORBIDDEN: 'admin-google-login-forbidden',
+    AUTH_UPSTREAM_TIMEOUT: 'admin-google-login-timeout',
+    AUTH_PROVIDER_DISABLED: 'admin-google-login-provider-disabled',
+    AUTH_TOKEN_VERIFY_FAILED: 'admin-google-login-token-error',
   };
   return fragments[code] || 'admin-google-login-error';
 }
