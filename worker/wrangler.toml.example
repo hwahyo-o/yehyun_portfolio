@@ -1,0 +1,18 @@
+name = "yehyun-portfolio-api"
+main = "src/index.js"
+compatibility_date = "2026-08-12"
+
+[vars]
+FIREBASE_PROJECT_ID = "yehyun-portfolio"
+ALLOWED_ORIGIN = "https://hwahyo-o.github.io"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "yehyun-portfolio"
+database_id = "SET_IN_CLOUDFLARE_DASHBOARD"
+
+# Set secrets with Wrangler or the Cloudflare dashboard:
+# wrangler secret put GOOGLE_CLIENT_ID
+# wrangler secret put GOOGLE_CLIENT_SECRET
+# wrangler secret put GOOGLE_REFRESH_TOKEN
+# Do not put secret values in this file or the repository.
