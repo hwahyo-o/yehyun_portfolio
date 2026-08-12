@@ -17,7 +17,7 @@ The Worker is not copied into the GitHub Pages artifact.
 1. Create a Cloudflare D1 database.
 2. Copy `wrangler.toml.example` to a local, ignored Wrangler configuration.
 3. Set the real D1 database ID locally.
-4. Apply the required D1 migrations in order: schema/001_initial.sql, schema/002_admin_backups_notifications.sql, schema/003_session_security.sql, then schema/004_firebase_google_login.sql.
+4. Apply the required D1 migrations in order: schema/001_initial.sql, schema/002_admin_backups_notifications.sql, schema/003_admin_sessions.sql, then schema/004_firebase_google_login.sql.
 5. Set the Google OAuth client ID, client secret, and refresh token as Worker secrets.
 6. Deploy the Worker and complete the static/API verification gates.
 7. Set the public Worker URL in a non-secret static configuration value only after the URL exists.
