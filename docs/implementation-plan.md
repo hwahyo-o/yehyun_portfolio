@@ -334,3 +334,16 @@ Gate: CI, HTTP, 브라우저 결과를 각각 분리 기록하고 모두 필요�
 8. Worker URL을 정적 앱의 non-secret API base 설정으로 연결한다.
 
 비밀값은 채팅으로 전달하지 않고 각 콘솔의 Secret 입력란에 직접 입력한다.
+
+
+## 12. 2026-08-12 관리자 운영 기능 추가
+
+- 로그인 전에는 Admin 버튼만 표시하고, Worker에서 Firebase UID 권한 확인이 끝난 뒤 알림·설정·로그아웃을 표시한다.
+- Firebase Auth local persistence를 사용해 명시적 로그아웃 전까지 세션을 유지한다.
+- 설정 모달에서 Google Drive 연결 상태, 연결/연결 해제, 수동 백업, 백업 목록, 다운로드, 복원을 제공한다.
+- 자동 백업은 관리자 페이지가 visible이고 인증된 동안 KST 00:00, 08:00, 16:00의 첫 2분 안에만 요청한다.
+- Drive 백업은 `Portfolio-con/Backups/YYYY-MM-DD/`에 저장한다.
+- 알림은 DM, Guestbook, share/reaction event, 백업/복원 이벤트를 D1에 기록한다.
+- Guestbook 비밀번호는 Worker에서 PBKDF2 salted hash로 저장하고 수정·삭제 요청에서만 HTTPS body로 검증한다.
+- D1 002 migration에 backups와 admin_notifications를 추가했다.
+- admin_roles 등록은 최종 main 병합 직전 운영 migration Gate 이후로 보류한다.
