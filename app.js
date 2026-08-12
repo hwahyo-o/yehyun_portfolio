@@ -580,7 +580,12 @@ document.addEventListener('click', (event) => {
   if (action === 'close-settings') closeModal(settingsModal);
   if (action === 'notifications') {
     notificationCenter.hidden = !notificationCenter.hidden;
-    if (!notificationCenter.hidden) loadNotifications().catch(() => {});
+    if (!notificationCenter.hidden) {
+      loadNotifications()
+        .then(() => apiRequest('/api/admin/notifications/read', { method: 'POST' }))
+        .then(loadNotifications)
+        .catch(() => {});
+    }
   }
   if (action === 'close-notifications') notificationCenter.hidden = true;
   if (action === 'admin-logout') window.firebase?.auth().signOut();
