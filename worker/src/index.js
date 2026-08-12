@@ -15,6 +15,8 @@ async function route(request, env) {
   const url = new URL(request.url);
   try {
     if (url.pathname === '/health') return json({ ok: true, service: 'yehyun-portfolio-api' });
+    if (url.pathname === '/api/admin/drive/start' && request.method === 'GET') return startGoogleDriveOAuth(request, env);
+    if (url.pathname === '/oauth/google/callback' && request.method === 'GET') return finishGoogleDriveOAuth(request, env);
     if (url.pathname === '/api/posts' && request.method === 'GET') return listPosts(request, env);
     if (url.pathname.startsWith('/api/posts/') && request.method === 'GET') {
       return getPost(request, env, url.pathname.split('/').pop());
@@ -110,6 +112,75 @@ async function createMessage(request, env, conversationId) {
   return json({ ok: true }, 201);
 }
 
+async function startGoogleDriveOAuth(request, env) {
+  const claims = await requireAdmin(request, env);
+  if (!env.GOOGLE_CLIENT_ID || !env.GOOGLE_REDIRECT_URI) {
+    throw httpError('GOOGLE_OAUTH_NOT_CONFIGURED', 'Google OAuth 설정이 필요합니다.', 503);
+  }
+  const state = crypto.randomUUID();
+  await env.DB.prepare('INSERT INTO google_oauth_states (state, uid, created_at) VALUES (?, ?, ?)')
+    .bind(state, claims.sub, new Date().toISOString()).run();
+  const params = new URLSearchParams({
+    client_id: env.GOOGLE_CLIENT_ID,
+    redirect_uri: env.GOOGLE_REDIRECT_URI,
+    response_type: 'code',
+    access_type: 'offline',
+    prompt: 'consent',
+    scope: 'https://www.googleapis.com/auth/drive.file',
+    state,
+  });
+  return new Response(null, { status: 302, headers: { Location: `https://accounts.google.com/o/oauth2/v2/auth?${params}` } });
+}
+
+async function finishGoogleDriveOAuth(request, env) {
+  const url = new URL(request.url);
+  const state = url.searchParams.get('state') || '';
+  const code = url.searchParams.get('code') || '';
+  if (!state || !code) return oauthRedirect(env, 'admin-drive-error');
+  const stateRow = await env.DB.prepare('SELECT state, uid, created_at FROM google_oauth_states WHERE state = ?').bind(state).first();
+  if (!stateRow || Date.now() - Date.parse(stateRow.created_at) > 10 * 60 * 1000) return oauthRedirect(env, 'admin-drive-expired');
+  await env.DB.prepare('DELETE FROM google_oauth_states WHERE state = ?').bind(state).run();
+  const tokenResponse = await fetch('https://oauth2.googleapis.com/token', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({
+      client_id: env.GOOGLE_CLIENT_ID || '',
+      client_secret: env.GOOGLE_CLIENT_SECRET || '',
+      code,
+      grant_type: 'authorization_code',
+      redirect_uri: env.GOOGLE_REDIRECT_URI || '',
+    }),
+  });
+  if (!tokenResponse.ok) return oauthRedirect(env, 'admin-drive-token-error');
+  const token = await tokenResponse.json();
+  if (!token.refresh_token || !env.GOOGLE_TOKEN_ENCRYPTION_KEY) return oauthRedirect(env, 'admin-drive-secret-error');
+  const encrypted = await encryptSecret(token.refresh_token, env.GOOGLE_TOKEN_ENCRYPTION_KEY);
+  const now = new Date().toISOString();
+  await env.DB.prepare(`INSERT INTO google_drive_connections (id, uid, google_subject, refresh_token_ciphertext, refresh_token_iv, created_at, updated_at)
+    VALUES ('primary', ?, ?, ?, ?, ?, ?)
+    ON CONFLICT(id) DO UPDATE SET uid = excluded.uid, google_subject = excluded.google_subject, refresh_token_ciphertext = excluded.refresh_token_ciphertext, refresh_token_iv = excluded.refresh_token_iv, updated_at = excluded.updated_at`)
+    .bind(stateRow.uid, token.id_token || null, encrypted.ciphertext, encrypted.iv, now, now).run();
+  return oauthRedirect(env, 'admin-drive-connected');
+}
+
+function oauthRedirect(env, status) {
+  const origin = env.ALLOWED_ORIGIN || 'https://hwahyo-o.github.io/yehyun_portfolio';
+  return new Response(null, { status: 302, headers: { Location: `${origin}/#${status}` } });
+}
+
+async function encryptSecret(value, encodedKey) {
+  const key = await crypto.subtle.importKey('raw', decodeBytes(encodedKey), 'AES-GCM', false, ['encrypt']);
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const ciphertext = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, key, new TextEncoder().encode(value));
+  return { ciphertext: encode(new Uint8Array(ciphertext)), iv: encode(iv) };
+}
+
+async function decryptSecret(ciphertext, iv, encodedKey) {
+  const key = await crypto.subtle.importKey('raw', decodeBytes(encodedKey), 'AES-GCM', false, ['decrypt']);
+  const plaintext = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: decodeBytes(iv) }, key, decodeBytes(ciphertext));
+  return new TextDecoder().decode(plaintext);
+}
+
 async function streamDriveMedia(request, env, postId, mediaId) {
   const isAdmin = await optionalAdmin(request, env);
   const row = await env.DB.prepare('SELECT p.status, p.is_private, m.drive_file_id, m.mime_type, m.file_name FROM posts p JOIN post_media m ON m.post_id = p.id WHERE p.id = ? AND m.id = ? AND p.deleted_at IS NULL').bind(postId, mediaId).first();
@@ -135,12 +206,13 @@ async function streamDriveMedia(request, env, postId, mediaId) {
 }
 
 async function getDriveAccessToken(env) {
-  if (!env.GOOGLE_CLIENT_ID || !env.GOOGLE_CLIENT_SECRET || !env.GOOGLE_REFRESH_TOKEN) {
-    const error = new Error('Google Drive credentials are not configured');
-    error.code = 'DRIVE_NOT_CONFIGURED';
-    error.status = 503;
-    error.publicMessage = 'Google Drive 연결 설정이 필요합니다.';
-    throw error;
+  let refreshToken = env.GOOGLE_REFRESH_TOKEN || '';
+  if (!refreshToken && env.GOOGLE_TOKEN_ENCRYPTION_KEY && env.DB) {
+    const connection = await env.DB.prepare('SELECT refresh_token_ciphertext, refresh_token_iv FROM google_drive_connections WHERE id = ?').bind('primary').first();
+    if (connection) refreshToken = await decryptSecret(connection.refresh_token_ciphertext, connection.refresh_token_iv, env.GOOGLE_TOKEN_ENCRYPTION_KEY);
+  }
+  if (!env.GOOGLE_CLIENT_ID || !env.GOOGLE_CLIENT_SECRET || !refreshToken) {
+    throw httpError('DRIVE_NOT_CONFIGURED', 'Google Drive 연결 설정이 필요합니다.', 503);
   }
   const response = await fetch('https://oauth2.googleapis.com/token', {
     method: 'POST',
@@ -148,17 +220,11 @@ async function getDriveAccessToken(env) {
     body: new URLSearchParams({
       client_id: env.GOOGLE_CLIENT_ID,
       client_secret: env.GOOGLE_CLIENT_SECRET,
-      refresh_token: env.GOOGLE_REFRESH_TOKEN,
+      refresh_token: refreshToken,
       grant_type: 'refresh_token',
     }),
   });
-  if (!response.ok) {
-    const error = new Error('Google token refresh failed');
-    error.code = 'DRIVE_AUTH_FAILED';
-    error.status = 502;
-    error.publicMessage = 'Google Drive 인증을 갱신하지 못했습니다.';
-    throw error;
-  }
+  if (!response.ok) throw httpError('DRIVE_AUTH_FAILED', 'Google Drive 인증을 갱신하지 못했습니다.', 502);
   const payload = await response.json();
   return payload.access_token;
 }
