@@ -1,15 +1,23 @@
 const FIREBASE_JWKS_URL = 'https://www.googleapis.com/service_accounts/v1/jwk/securetoken@system.gserviceaccount.com';
+const FIRESTORE_TOKEN_URL = 'https://oauth2.googleapis.com/token';
+const FIRESTORE_SCOPE = 'https://www.googleapis.com/auth/datastore';
 let certificateCache = { expiresAt: 0, keys: new Map() };
+let firestoreTokenCache = { accessToken: '', expiresAt: 0 };
 
 export default {
-  async fetch(request, env) {
+  async fetch(request, env, ctx) {
     const origin = request.headers.get('Origin');
-    const response = await route(request, env);
-    return withCors(response, origin, env);
+    const visitorId = readCookie(request, 'portfolio_visitor_id') || crypto.randomUUID();
+    const response = await route(request, env, ctx, visitorId);
+    return withVisitorCookie(withCors(response, origin, env), visitorId);
+  },
+
+  async scheduled(controller, env, ctx) {
+    ctx.waitUntil(runActivityBackup(env));
   },
 };
 
-async function route(request, env) {
+async function route(request, env, ctx, visitorId) {
   if (request.method === 'OPTIONS') return new Response(null, { status: 204 });
 
   const url = new URL(request.url);
@@ -52,7 +60,7 @@ async function route(request, env) {
         ? listMessages(env, conversationId)
         : createMessage(request, env, conversationId);
     }
-    if (url.pathname === '/api/events' && request.method === 'POST') return recordPublicEvent(request, env);
+    if (url.pathname === '/api/events' && request.method === 'POST') return recordPublicEvent(request, env, visitorId);
     if (url.pathname === '/api/guestbook/' && request.method === 'PATCH') return json({ error: { code: 'NOT_FOUND', message: '방명록을 찾을 수 없습니다.' } }, 404);
     if (url.pathname.startsWith('/api/guestbook/') && url.pathname.endsWith('/replies') && request.method === 'POST') {
       return createGuestbookReply(request, env, url.pathname.split('/')[3]);
@@ -655,17 +663,30 @@ async function recordNotification(env, type, title, body, entityId = null) {
     .bind(crypto.randomUUID(), type, title, body, entityId, new Date().toISOString()).run();
 }
 
-async function recordPublicEvent(request, env) {
-  const body = await request.json();
-  const type = ['share', 'reaction'].includes(body.type) ? body.type : '';
-  if (!type) return json({ error: { code: 'INVALID_INPUT', message: '이벤트 종류가 올바르지 않습니다.' } }, 400);
-  await recordNotification(
-    env,
-    type,
-    type === 'share' ? '게시물 공유 알림' : '게시물 반응 알림',
-    type === 'share' ? '방문자가 게시물을 공유했습니다.' : '방문자가 게시물에 반응을 남겼습니다.',
-    cleanText(body.postId, 100),
-  );
+async function recordPublicEvent(request, env, visitorId) {
+  const body = await request.json().catch(() => ({}));
+  const legacyType = ['share', 'reaction'].includes(body.type) ? body.type : '';
+  const action = ['post.view', 'content.share', 'content.reaction', 'guestbook.create', 'dm.create'].includes(body.action)
+    ? body.action
+    : legacyType ? (legacyType === 'share' ? 'content.share' : 'content.reaction') : '';
+  if (!action) return json({ error: { code: 'INVALID_INPUT', message: '이벤트 종류가 올바르지 않습니다.' } }, 400);
+  await recordActivity(env, {
+    eventId: String(body.eventId || crypto.randomUUID()),
+    actorId: visitorId,
+    actorType: 'guest',
+    action,
+    entityId: cleanText(body.entityId || body.postId, 100),
+    metadata: {},
+  });
+  if (['content.share', 'content.reaction'].includes(action)) {
+    await recordNotification(
+      env,
+      action === 'content.share' ? 'share' : 'reaction',
+      action === 'content.share' ? '게시물 공유 알림' : '게시물 반응 알림',
+      action === 'content.share' ? '방문자가 게시물을 공유했습니다.' : '방문자가 게시물에 반응을 남겼습니다.',
+      cleanText(body.entityId || body.postId, 100),
+    );
+  }
   return json({ ok: true }, 201);
 }
 
@@ -1123,6 +1144,18 @@ function clearCookie(response) {
   return new Response(response.body, { status: response.status, headers });
 }
 
+function withVisitorCookie(response, visitorId) {
+  const headers = new Headers(response.headers);
+  if (!readCookieFromResponse(headers, 'portfolio_visitor_id')) {
+    headers.append('Set-Cookie', 'portfolio_visitor_id=' + encodeURIComponent(visitorId) + '; Max-Age=31536000; Path=/; HttpOnly; Secure; SameSite=None');
+  }
+  return new Response(response.body, { status: response.status, headers });
+}
+
+function readCookieFromResponse(headers, name) {
+  return headers.get('Set-Cookie')?.split(';')[0]?.startsWith(name + '=') || false;
+}
+
 async function optionalAdmin(request, env) {
   try {
     return await requireAdmin(request, env);
@@ -1211,6 +1244,140 @@ function cleanText(value, maxLength) {
 function normalizeEmail(value) {
   return String(value || '').trim().toLowerCase();
 }
+
+async function recordActivity(env, event) {
+  const createdAt = new Date().toISOString();
+  const metadata = JSON.stringify(event.metadata || {});
+  try {
+    await env.DB.prepare(
+      'INSERT OR IGNORE INTO activity_events (event_id, actor_id, actor_type, action, entity_id, result, metadata_json, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+    ).bind(
+      event.eventId,
+      event.actorId,
+      event.actorType,
+      event.action,
+      event.entityId || null,
+      event.result || 'success',
+      metadata,
+      createdAt,
+    ).run();
+  } catch (error) {
+    console.error('activity_ledger_failed', { code: error.code || 'D1_WRITE_FAILED' });
+  }
+  if (env.FIRESTORE_SERVICE_ACCOUNT_JSON) {
+    try {
+      await writeFirestoreActivity(env, { ...event, createdAt });
+    } catch (error) {
+      console.error('activity_firestore_failed', { code: error.code || 'FIRESTORE_WRITE_FAILED' });
+    }
+  }
+}
+
+async function writeFirestoreActivity(env, event) {
+  const credentials = JSON.parse(env.FIRESTORE_SERVICE_ACCOUNT_JSON);
+  if (!credentials.project_id || !credentials.client_email || !credentials.private_key) {
+    throw new Error('FIRESTORE_CREDENTIALS_INVALID');
+  }
+  const accessToken = await getFirestoreAccessToken(credentials);
+  const documentId = encodeURIComponent(event.actorId + '_' + event.eventId).slice(0, 500);
+  const name = 'projects/' + credentials.project_id + '/databases/(default)/documents/activity_events/' + documentId;
+  const fields = {
+    actorId: { stringValue: event.actorId },
+    actorType: { stringValue: event.actorType },
+    action: { stringValue: event.action },
+    entityId: { stringValue: event.entityId || '' },
+    result: { stringValue: event.result || 'success' },
+    metadata: { stringValue: JSON.stringify(event.metadata || {}) },
+    createdAt: { timestampValue: event.createdAt },
+  };
+  const response = await fetch('https://firestore.googleapis.com/v1/projects/' + encodeURIComponent(credentials.project_id) + '/databases/(default)/documents:commit', {
+    method: 'POST',
+    headers: { Authorization: 'Bearer ' + accessToken, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ writes: [{ update: { name, fields } }] }),
+  });
+  if (!response.ok) throw new Error('FIRESTORE_WRITE_FAILED');
+}
+
+async function getFirestoreAccessToken(credentials) {
+  if (firestoreTokenCache.accessToken && firestoreTokenCache.expiresAt > Date.now() + 60_000) {
+    return firestoreTokenCache.accessToken;
+  }
+  const now = Math.floor(Date.now() / 1000);
+  const header = encodeUrl(JSON.stringify({ alg: 'RS256', typ: 'JWT' }));
+  const claims = encodeUrl(JSON.stringify({
+    iss: credentials.client_email,
+    scope: FIRESTORE_SCOPE,
+    aud: FIRESTORE_TOKEN_URL,
+    iat: now,
+    exp: now + 3600,
+  }));
+  const key = await crypto.subtle.importKey(
+    'pkcs8',
+    pemToBytes(credentials.private_key),
+    { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256' },
+    false,
+    ['sign'],
+  );
+  const signature = await crypto.subtle.sign(
+    { name: 'RSASSA-PKCS1-v1_5' },
+    key,
+    new TextEncoder().encode(header + '.' + claims),
+  );
+  const response = await fetch(FIRESTORE_TOKEN_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({
+      grant_type: 'urn:ietf:params:oauth:grant-type:jwt-bearer',
+      assertion: header + '.' + claims + '.' + encodeUrlBytes(new Uint8Array(signature)),
+    }),
+  });
+  if (!response.ok) throw new Error('FIRESTORE_TOKEN_FAILED');
+  const payload = await response.json();
+  if (!payload.access_token) throw new Error('FIRESTORE_TOKEN_FAILED');
+  firestoreTokenCache = { accessToken: payload.access_token, expiresAt: Date.now() + Number(payload.expires_in || 3600) * 1000 };
+  return payload.access_token;
+}
+
+function pemToBytes(value) {
+  const base64 = String(value).replace(/-----BEGIN PRIVATE KEY-----|-----END PRIVATE KEY-----|\\s+/g, '');
+  const binary = atob(base64);
+  return Uint8Array.from(binary, (character) => character.charCodeAt(0));
+}
+
+function encodeUrl(value) {
+  return encodeUrlBytes(new TextEncoder().encode(value));
+}
+
+function encodeUrlBytes(bytes) {
+  return encode(bytes).replace(/\\+/g, '-').replace(/\\//g, '_').replace(/=+$/g, '');
+}
+
+async function runActivityBackup(env) {
+  if (!env.DB) return;
+  const end = new Date();
+  const start = new Date(end.getTime() - 24 * 60 * 60 * 1000);
+  const result = await env.DB.prepare(
+    'SELECT event_id, actor_id, actor_type, action, entity_id, result, metadata_json, created_at FROM activity_events WHERE created_at >= ? AND created_at < ? ORDER BY created_at ASC',
+  ).bind(start.toISOString(), end.toISOString()).all();
+  const payload = JSON.stringify({
+    schemaVersion: 1,
+    timezone: 'Asia/Seoul',
+    windowStart: start.toISOString(),
+    windowEnd: end.toISOString(),
+    events: result.results || [],
+  });
+  const checksum = await sha256Text(payload);
+  const id = 'activity_' + end.toISOString().slice(0, 10);
+  await env.DB.prepare(
+    'INSERT OR REPLACE INTO activity_backup_runs (id, window_start, window_end, event_count, checksum, payload, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
+  ).bind(id, start.toISOString(), end.toISOString(), result.results?.length || 0, checksum, payload, end.toISOString()).run();
+}
+
+async function sha256Text(value) {
+  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(value));
+  return encodeUrlBytes(new Uint8Array(digest));
+}
+
 
 function isSafeId(value) {
   return /^[A-Za-z0-9_-]{8,100}$/.test(value);
