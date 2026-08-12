@@ -156,3 +156,16 @@ Apply both files in order to a new D1 database. Do not insert an administrator r
 2. `worker/schema/002_admin_backups_notifications.sql`
 
 For an existing database that already has `001_initial.sql`, apply only `002_admin_backups_notifications.sql`. Register the administrator UID in `admin_roles` only after the implementation, Worker deployment, verification, and main-merge gates have passed.
+
+
+### Why the Actions button may be missing
+
+GitHub only exposes a manual workflow trigger after the workflow file exists on the repository default branch. The migration workflow currently exists on drill because application changes are intentionally not merged to main yet. Therefore, if Apply D1 migrations is not visible in the Actions tab, this is expected and is not a user error.
+
+Do not copy a migration workflow into an arbitrary branch or change its trigger to push. The safe options are:
+
+1. After the implementation PR is approved, merge the workflow file to main and then use the Actions tab with the drill ref where supported.
+2. Use the Cloudflare D1 Console for the one-time migration.
+3. Use a separately approved operational change that places only the migration workflow on the default branch.
+
+Do not run a database-changing workflow automatically on every push.
