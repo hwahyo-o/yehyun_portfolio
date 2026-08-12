@@ -155,16 +155,17 @@ async function finishGoogleDriveOAuth(request, env) {
   const token = await tokenResponse.json();
   if (!token.refresh_token || !env.GOOGLE_TOKEN_ENCRYPTION_KEY) return oauthRedirect(env, 'admin-drive-secret-error');
   const encrypted = await encryptSecret(token.refresh_token, env.GOOGLE_TOKEN_ENCRYPTION_KEY);
+  const googleSubject = token.id_token ? JSON.parse(decode(token.id_token.split('.')[1])).sub || null : null;
   const now = new Date().toISOString();
   await env.DB.prepare(`INSERT INTO google_drive_connections (id, uid, google_subject, refresh_token_ciphertext, refresh_token_iv, created_at, updated_at)
     VALUES ('primary', ?, ?, ?, ?, ?, ?)
     ON CONFLICT(id) DO UPDATE SET uid = excluded.uid, google_subject = excluded.google_subject, refresh_token_ciphertext = excluded.refresh_token_ciphertext, refresh_token_iv = excluded.refresh_token_iv, updated_at = excluded.updated_at`)
-    .bind(stateRow.uid, token.id_token || null, encrypted.ciphertext, encrypted.iv, now, now).run();
+    .bind(stateRow.uid, googleSubject, encrypted.ciphertext, encrypted.iv, now, now).run();
   return oauthRedirect(env, 'admin-drive-connected');
 }
 
 function oauthRedirect(env, status) {
-  const origin = env.ALLOWED_ORIGIN || 'https://hwahyo-o.github.io/yehyun_portfolio';
+  const origin = env.FRONTEND_URL || 'https://hwahyo-o.github.io/yehyun_portfolio';
   return new Response(null, { status: 302, headers: { Location: `${origin}/#${status}` } });
 }
 
