@@ -787,3 +787,18 @@ Gate: 모든 CI 성공, 브라우저 console에 미해결 오류 없음, 실제 
 - Firebase Authentication의 Email/Password 및 Google Provider 활성화
 - Google OAuth Web Client callback URI와 Firebase authorized domain
 - Worker Secret 이름과 길이·형식만 확인하고 값은 문서화하지 않는다.
+
+
+## 24. 로그인 오류 재진단 구현 결과
+
+- Worker 공통 오류 응답이 알 수 없는 예외도 `INTERNAL_ERROR` 코드와 안전한 사용자 메시지로 일관되게 반환하도록 보강했다.
+- Firebase JWT header/payload 파싱 실패를 일반 서버 오류가 아닌 `INVALID_TOKEN` 계열로 변환했다.
+- Google OAuth의 Firebase `requestUri`를 Pages origin으로 정규화해 authorized domain 검증 실패 가능성을 줄였다.
+- Google Provider 비활성화와 기존 Firebase 계정 연결 필요 상태를 서로 다른 callback fragment로 구분했다.
+- 비밀값·토큰·Firebase 원문 응답은 로그와 화면에 노출하지 않는다.
+
+### 검증
+
+- drill 최신 정적 검증 성공: Worker 문법, app.js 문법, migration 파일, Secret 패턴 검사
+- 운영 브라우저 화면 확인은 사용자가 직접 수행한다.
+- 실제 관리자 성공 로그인 여부는 Firebase 계정·Provider·Secret의 운영 상태에 종속되므로 화면 확인 결과에 따라 다음 재수정 Loop를 시작한다.
