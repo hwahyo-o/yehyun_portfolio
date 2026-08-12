@@ -115,7 +115,21 @@ async function listUpdates(env) {
 
 async function listGuestbook(env) {
   const result = await env.DB.prepare('SELECT id, name, content, created_at AS date FROM guestbook_comments WHERE deleted_at IS NULL ORDER BY created_at DESC LIMIT 10').all();
-  return json({ items: result.results || [] });
+  const items = result.results || [];
+  if (!items.length) return json({ items: [] });
+  const placeholders = items.map(() => '?').join(', ');
+  const replies = await env.DB.prepare(
+    'SELECT id, comment_id, content, author_type, author_name, created_at AS date FROM guestbook_replies WHERE deleted_at IS NULL AND comment_id IN (' + placeholders + ') ORDER BY created_at ASC',
+  ).bind(...items.map((item) => item.id)).all();
+  const repliesByComment = new Map();
+  (replies.results || []).forEach((reply) => {
+    const list = repliesByComment.get(reply.comment_id) || [];
+    list.push(reply);
+    repliesByComment.set(reply.comment_id, list);
+  });
+  return json({
+    items: items.map((item) => ({ ...item, replies: repliesByComment.get(item.id) || [] })),
+  });
 }
 
 async function createGuestbook(request, env) {
