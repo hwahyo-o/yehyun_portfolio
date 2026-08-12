@@ -70,7 +70,8 @@ These are separate from Worker Secrets. In GitHub:
 
 1. Open Settings -> Secrets and variables -> Actions.
 2. Add repository secrets:
-   - `CLOUDFLARE_API_TOKEN`: a Cloudflare API token with Account -> D1 -> Edit permission.
+   - `CLOUDFLARE_API_TOKEN`: a Cloudflare API token with Account -> D1 -> Edit permission, used only by migration workflows.
+   - `CLOUDFLARE_WORKER_API_TOKEN`: a separate Cloudflare API token with Workers Scripts/Workers & Pages edit permission, used only by the Worker deployment workflow.
    - `CLOUDFLARE_ACCOUNT_ID`: the Cloudflare account ID.
 3. Do not add Firebase keys, OAuth secrets, refresh tokens, or encryption keys to GitHub Actions for the D1 migration workflow.
 
@@ -94,7 +95,7 @@ Before running either workflow:
 1. In Cloudflare, create an API Token with Account -> D1 -> Edit permission.
 2. Copy the Cloudflare Account ID from the dashboard.
 3. In GitHub, open Settings -> Secrets and variables -> Actions.
-4. Add repository secrets named `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID`.
+4. Add repository secrets named `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_WORKER_API_TOKEN`, and `CLOUDFLARE_ACCOUNT_ID`.
 5. Do not add Firebase keys, OAuth secrets, refresh tokens, or encryption keys to GitHub for this task.
 
 For a new database, or when no previous migration workflow has succeeded:
@@ -165,6 +166,6 @@ For an existing database that already has `001_initial.sql`, apply only `002_adm
 - The latest migration run completed successfully for schema 001, 002, 003, and required-table verification.
 - `worker/wrangler.toml` contains only public configuration and the D1 binding.
 - `.github/workflows/deploy-worker.yml` deploys the Worker manually or after Worker-source changes reach `main`.
-- GitHub Actions uses only `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID`; all Firebase, Google OAuth, refresh-token, and encryption values remain Cloudflare Worker Secrets.
+- GitHub Actions uses only the D1 token, Worker deploy token, and account ID; all Firebase, Google OAuth, refresh-token, and encryption values remain Cloudflare Worker Secrets.
 
 Before the first production Worker verification, confirm the Cloudflare Worker Secrets and Google OAuth redirect URI in the provider consoles. Never add those values to the repository.
