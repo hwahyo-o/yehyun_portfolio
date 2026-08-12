@@ -77,3 +77,25 @@ $bytes = New-Object byte[] 32
 Copy the resulting single-line Base64 value directly into the Cloudflare Worker Secret named `GOOGLE_TOKEN_ENCRYPTION_KEY`. Do not commit it or send it in chat. Keep the same value permanently; changing it makes previously stored Drive refresh tokens unreadable.
 
 Also add `GOOGLE_CLIENT_SECRET` as a Worker Secret using the secret shown once by Google Cloud when the OAuth Web Client was created. Do not put it in `wrangler.toml`, GitHub, or the browser.
+
+
+## Administrator settings and backup behavior
+
+After administrator authentication is verified by the Worker, the static header shows notifications, settings, and logout controls.
+
+- Firebase Auth uses local persistence until the administrator explicitly logs out.
+- Google Drive connection status is stored server-side; disconnecting removes the encrypted refresh token from D1 but does not delete existing Drive backups.
+- Manual backup is created from the settings modal.
+- Automatic backup is requested only while the administrator page is visible and authenticated, within the first two minutes of 00:00, 08:00, or 16:00 KST. Closing the page or leaving it hidden does not create a catch-up backup.
+- Backups are stored under `Portfolio-con/Backups/YYYY-MM-DD/` and are listed newest first.
+- Restore replaces shared D1 content tables but never replaces `admin_roles` or Google OAuth connection data.
+- Download and restore endpoints require the administrator Firebase ID token.
+
+## Migration order
+
+Apply both files in order to a new D1 database:
+
+1. `worker/schema/001_initial.sql`
+2. `worker/schema/002_admin_backups_notifications.sql`
+
+For an existing database that already has `001_initial.sql`, apply only `002_admin_backups_notifications.sql`. Register the administrator UID in `admin_roles` only after all implementation gates have passed and the final production migration is complete.
