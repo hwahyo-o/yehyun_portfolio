@@ -22,7 +22,13 @@
             <button data-route="category/UX%2FUI">UX/UI <i class="bi bi-arrow-down-short" aria-hidden="true"></i></button>
             <button data-route="category/Graphic">Graphic <i class="bi bi-arrow-down-short" aria-hidden="true"></i></button>
             <button data-route="category/Video">Video <i class="bi bi-arrow-down-short" aria-hidden="true"></i></button>
+            <button data-scroll-target="community">Community <i class="bi bi-arrow-down-short" aria-hidden="true"></i></button>
+            <button data-scroll-target="contact">Contact <i class="bi bi-arrow-down-short" aria-hidden="true"></i></button>
           </nav>
+          <div class="gnb-tools" aria-label="Site tools">
+            <button class="gnb-tool" id="theme-toggle" data-action="theme" aria-label="Toggle light and dark theme"><i class="bi bi-moon-stars" aria-hidden="true"></i></button>
+            <button class="gnb-tool gnb-admin-tool" data-action="admin-login">Admin</button>
+          </div>
         </header>
 
         <main class="page page-content" id="home-page" data-page="home">
@@ -165,6 +171,68 @@
                   <span class="file-slot" data-media-slot="file-04"></span>
                 </div>
               </div>
+            </div>
+          </section>
+
+          <section class="content-section community-section" id="community" aria-labelledby="community-title">
+            <div class="section-heading content-section-heading">
+              <div>
+                <p class="section-label">Community</p>
+                <h2 id="community-title">Updates &amp; Guestbook</h2>
+              </div>
+              <span class="section-note">Portfolio notes and visitor messages</span>
+            </div>
+            <div class="community-grid">
+              <article class="update-panel">
+                <div class="panel-heading"><h3>Update Log</h3><span class="panel-status" id="update-status">Loading</span></div>
+                <ol class="update-list" id="update-list">
+                  <li class="empty-state">업데이트 기록을 불러오는 중입니다.</li>
+                </ol>
+              </article>
+              <article class="guestbook-panel">
+                <div class="panel-heading"><h3>Guestbook</h3><span class="panel-status" id="guestbook-status">Loading</span></div>
+                <form class="guestbook-form" id="guestbook-form">
+                  <div class="form-row">
+                    <label>닉네임<input name="name" maxlength="30" required></label>
+                    <label>비밀번호<input name="password" type="password" minlength="4" maxlength="64" required></label>
+                  </div>
+                  <label>메시지<textarea name="content" rows="4" maxlength="1000" required></textarea></label>
+                  <button class="btn btn-primary rounded-pill" type="submit">남기기 <i class="bi bi-send" aria-hidden="true"></i></button>
+                </form>
+                <ol class="guestbook-list" id="guestbook-list">
+                  <li class="empty-state">방명록을 불러오는 중입니다.</li>
+                </ol>
+              </article>
+            </div>
+          </section>
+
+          <section class="content-section contact-section" id="contact" aria-labelledby="contact-title">
+            <div class="section-heading content-section-heading">
+              <div>
+                <p class="section-label">Contact</p>
+                <h2 id="contact-title">Let&apos;s connect</h2>
+              </div>
+              <span class="section-note">Questions, collaborations, and project conversations</span>
+            </div>
+            <div class="contact-grid">
+              <a class="contact-card" href="mailto:ajas03974@gmail.com">
+                <i class="bi bi-envelope-paper" aria-hidden="true"></i>
+                <span><strong>Email</strong><small>ajas03974@gmail.com</small></span>
+                <i class="bi bi-arrow-up-right" aria-hidden="true"></i>
+              </a>
+              <article class="contact-card contact-chat-card">
+                <i class="bi bi-chat-dots" aria-hidden="true"></i>
+                <span><strong>Direct Message</strong><small>간단한 문의를 남겨주세요.</small></span>
+                <button class="btn btn-sm btn-outline-dark rounded-pill" data-action="open-chat" type="button">Open chat</button>
+              </article>
+            </div>
+            <div class="chat-panel" id="chat-panel" hidden>
+              <div class="chat-panel-heading"><strong>Direct Message</strong><button class="btn-close" data-action="close-chat" aria-label="Close chat" type="button"></button></div>
+              <div class="chat-messages" id="chat-messages" aria-live="polite"><p class="empty-state">안녕하세요! 문의사항을 남겨주세요.</p></div>
+              <form class="chat-form" id="chat-form">
+                <input name="message" maxlength="1000" placeholder="메시지를 입력하세요" required>
+                <button class="btn btn-primary rounded-pill" type="submit" aria-label="Send message"><i class="bi bi-send" aria-hidden="true"></i></button>
+              </form>
             </div>
           </section>
 
