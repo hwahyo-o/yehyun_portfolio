@@ -257,8 +257,22 @@ function renderGuestbook(items = []) {
       createText('time', item.date || item.createdAt || ''),
       createText('strong', item.name || 'Anonymous'),
       createText('p', item.content || ''),
-      actions,
     );
+    if (Array.isArray(item.replies) && item.replies.length) {
+      const replies = document.createElement('ol');
+      replies.className = 'guestbook-replies';
+      item.replies.forEach((reply) => {
+        const replyItem = document.createElement('li');
+        replyItem.append(
+          createText('strong', reply.author_name || 'Anonymous'),
+          createText('p', reply.content || ''),
+          createText('time', reply.date || ''),
+        );
+        replies.append(replyItem);
+      });
+      entry.append(replies);
+    }
+    entry.append(actions);
     guestbookList.append(entry);
   });
 }
