@@ -95,7 +95,7 @@ Before running either workflow:
 1. In Cloudflare, create an API Token with Account -> D1 -> Edit permission.
 2. Copy the Cloudflare Account ID from the dashboard.
 3. In GitHub, open Settings -> Secrets and variables -> Actions.
-4. Add repository secrets named `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID`.
+4. Add repository secrets named `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_WORKER_API_TOKEN`, and `CLOUDFLARE_ACCOUNT_ID`.
 5. Do not add Firebase keys, OAuth secrets, refresh tokens, or encryption keys to GitHub for this task.
 
 For a new database, or when no previous migration workflow has succeeded:
