@@ -258,7 +258,7 @@ function assertRelativeAssetReferences(html, css, js) {
     || /javascript:/i.test(source)) {
     throw httpError('UNSAFE_CONTENT', '외부 실행 코드 또는 위험한 HTML을 사용할 수 없습니다.', 400);
   }
-  if (/(?:^|[("'=])\s*\.\\.(?:[/"')?#]|$)/m.test(source)) {
+  if (/(?:^|[("'=])\s*\.\.(?:[/"')?#]|$)/m.test(source)) {
     throw httpError('UNSAFE_CONTENT', '상위 경로 참조는 사용할 수 없습니다.', 400);
   }
 }
