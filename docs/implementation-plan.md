@@ -347,3 +347,17 @@ Gate: CI, HTTP, 브라우저 결과를 각각 분리 기록하고 모두 필요�
 - Guestbook 비밀번호는 Worker에서 PBKDF2 salted hash로 저장하고 수정·삭제 요청에서만 HTTPS body로 검증한다.
 - D1 002 migration에 backups와 admin_notifications를 추가했다.
 - admin_roles 등록은 최종 main 병합 직전 운영 migration Gate 이후로 보류한다.
+
+
+## 13. 2026-08-12 보안 경고 대응
+
+- 공개 config.js에서 Firebase Web API Key와 Firebase 설정을 제거했다.
+- 브라우저 Firebase SDK를 제거했다.
+- 로그인·세션 검증을 Cloudflare Worker 인증 API로 이동했다.
+- Firebase Web API Key는 Worker Secret FIREBASE_WEB_API_KEY로만 사용한다.
+- Firebase refresh token은 Worker Secret SESSION_ENCRYPTION_KEY로 암호화해 D1 admin_sessions에 저장한다.
+- 브라우저에는 HttpOnly·Secure·SameSite 쿠키만 전달하며 Firebase API Key, OAuth secret, refresh token, 암호화 키를 전달하지 않는다.
+- D1 003_admin_sessions.sql과 기존 migration을 위한 수동 GitHub Actions 경로를 추가했다.
+- GitHub Actions에는 D1 작업용 CLOUDFLARE_API_TOKEN, CLOUDFLARE_ACCOUNT_ID만 저장한다.
+- 기존 Git 이력에 탐지된 Firebase 키는 코드에서 제거했지만, 실제 폐기·교체와 GitHub Secret Scanning 경고 종료는 사용자가 Google Cloud/GitHub에서 수행해야 한다.
+- 관리자 등록은 여전히 최종 배포·검증 Gate 이후로 보류한다.
