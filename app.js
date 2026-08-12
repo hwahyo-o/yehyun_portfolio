@@ -539,17 +539,7 @@ function bindAdminActions() {
     try {
       const payload = await apiRequest('/api/admin/posts', {
         method: 'POST',
-        body: JSON.stringify({
-          type: String(data.get('type') || ''),
-          title: String(data.get('title') || ''),
-          description: String(data.get('description') || ''),
-          html: String(data.get('html') || ''),
-          css: String(data.get('css') || ''),
-          js: String(data.get('js') || ''),
-          isPrivate: data.get('isPrivate') === 'on',
-          status: String(data.get('status') || 'draft'),
-          media: [],
-        }),
+        body: data,
       });
       publishPostStatus.textContent = '배포 완료: ' + payload.item.contentPath;
       adminPostForm.reset();
