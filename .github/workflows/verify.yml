@@ -19,6 +19,7 @@ jobs:
           test -f index.html
           test -f styles.css
           test -f app.js
+          test -f config.js
           test -f public/portfolio-favicon.png
           test -f public/yehyun_logo.png
           test ! -e package.json
