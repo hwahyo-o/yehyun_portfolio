@@ -1,4 +1,4 @@
-const FIREBASE_CERTS_URL = 'https://www.googleapis.com/robot/v1/metadata/x509/securetoken@system.gserviceaccount.com';
+const FIREBASE_JWKS_URL = 'https://www.googleapis.com/service_accounts/v1/jwk/securetoken@system.gserviceaccount.com';
 let certificateCache = { expiresAt: 0, keys: new Map() };
 
 export default {
@@ -200,24 +200,18 @@ async function verifyFirebaseToken(token, env) {
 
 async function getFirebaseCertificates() {
   if (certificateCache.expiresAt > Date.now()) return certificateCache.keys;
-  const response = await fetch(FIREBASE_CERTS_URL);
+  const response = await fetch(FIREBASE_JWKS_URL);
   if (!response.ok) throw httpError('CERTS_UNAVAILABLE', '인증서를 불러오지 못했습니다.', 503);
   const payload = await response.json();
   const keys = new Map();
-  await Promise.all(Object.entries(payload).map(async ([kid, pem]) => keys.set(kid, await importCertificate(pem))));
+  await Promise.all((payload.keys || []).map(async (jwk) => keys.set(jwk.kid, await importJwk(jwk))));
   const maxAge = Number((response.headers.get('Cache-Control') || '').match(/max-age=(\d+)/)?.[1] || 3600);
   certificateCache = { expiresAt: Date.now() + maxAge * 1000, keys };
   return keys;
 }
 
-async function importCertificate(pem) {
-  return crypto.subtle.importKey('spki', pemToBytes(pem), { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256' }, false, ['verify']);
-}
-
-function pemToBytes(pem) {
-  const base64 = pem.replace(/-----BEGIN CERTIFICATE-----|-----END CERTIFICATE-----|\s/g, '');
-  const binary = atob(base64);
-  return Uint8Array.from(binary, (character) => character.charCodeAt(0)).buffer;
+async function importJwk(jwk) {
+  return crypto.subtle.importKey('jwk', jwk, { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256' }, false, ['verify']);
 }
 
 function decode(value) {
