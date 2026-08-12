@@ -80,16 +80,16 @@ async function route(request, env) {
       return listAdminPosts(env);
     }
     if (url.pathname === '/api/admin/posts' && request.method === 'POST') {
-      await requireAdmin(request, env);
-      return createAdminPost(request, env);
+      const claims = await requireAdmin(request, env);
+      return createAdminPost(request, env, claims);
     }
     if (url.pathname.startsWith('/api/admin/posts/') && request.method === 'PATCH') {
-      await requireAdmin(request, env);
-      return updateAdminPost(request, env, url.pathname.split('/').pop());
+      const claims = await requireAdmin(request, env);
+      return updateAdminPost(request, env, url.pathname.split('/').pop(), claims);
     }
     if (url.pathname.startsWith('/api/admin/posts/') && request.method === 'DELETE') {
-      await requireAdmin(request, env);
-      return deleteAdminPost(request, env, url.pathname.split('/').pop());
+      const claims = await requireAdmin(request, env);
+      return deleteAdminPost(request, env, url.pathname.split('/').pop(), claims);
     }
     if (url.pathname.startsWith('/api/admin/backups/') && url.pathname.endsWith('/download') && request.method === 'GET') {
       await requireAdmin(request, env);
@@ -137,7 +137,7 @@ async function listAdminPosts(env) {
   return json({ items: result.results || [] });
 }
 
-async function createAdminPost(request, env) {
+async function createAdminPost(request, env, claims) {
   const body = await request.json().catch(() => ({}));
   const input = validatePostInput(body);
   if (!env.GITHUB_CONTENT_TOKEN || !env.GITHUB_REPOSITORY) {
@@ -171,7 +171,7 @@ async function createAdminPost(request, env) {
       env.DB.prepare("UPDATE upload_jobs SET status = 'content_committed', github_commit_sha = ?, updated_at = ? WHERE id = ?").bind(commitSha, new Date().toISOString(), jobId),
       env.DB.prepare("UPDATE posts SET status = ?, updated_at = ? WHERE id = ?").bind(input.status, new Date().toISOString(), id),
       env.DB.prepare('INSERT INTO audit_logs (id, uid, action, entity_type, entity_id, created_at) VALUES (?, ?, ?, ?, ?, ?)')
-        .bind(crypto.randomUUID(), 'admin', 'content_publish', 'post', id, new Date().toISOString()),
+        .bind(crypto.randomUUID(), claims.sub, 'content_publish', 'post', id, new Date().toISOString()),
     ]);
     return json({ item: { id, contentPath, status: input.status }, uploadJobId: jobId }, 201);
   } catch (error) {
@@ -182,7 +182,7 @@ async function createAdminPost(request, env) {
   }
 }
 
-async function updateAdminPost(request, env, postId) {
+async function updateAdminPost(request, env, postId, claims) {
   if (!isSafeId(postId)) return json({ error: { code: 'INVALID_ID', message: '게시물 ID가 올바르지 않습니다.' } }, 400);
   const body = await request.json().catch(() => ({}));
   const title = cleanText(body.title, 120);
@@ -196,7 +196,7 @@ async function updateAdminPost(request, env, postId) {
   return json({ ok: true });
 }
 
-async function deleteAdminPost(request, env, postId) {
+async function deleteAdminPost(request, env, postId, claims) {
   if (!isSafeId(postId)) return json({ error: { code: 'INVALID_ID', message: '게시물 ID가 올바르지 않습니다.' } }, 400);
   const row = await env.DB.prepare('SELECT id, title FROM posts WHERE id = ? AND deleted_at IS NULL').bind(postId).first();
   if (!row) return json({ error: { code: 'NOT_FOUND', message: '게시물을 찾을 수 없습니다.' } }, 404);
@@ -204,7 +204,7 @@ async function deleteAdminPost(request, env, postId) {
   await env.DB.batch([
     env.DB.prepare("UPDATE posts SET deleted_at = ?, status = 'deleted', updated_at = ? WHERE id = ?").bind(now, now, postId),
     env.DB.prepare('INSERT INTO audit_logs (id, uid, action, entity_type, entity_id, created_at) VALUES (?, ?, ?, ?, ?, ?)')
-      .bind(crypto.randomUUID(), 'admin', 'post_delete', 'post', postId, now),
+      .bind(crypto.randomUUID(), claims.sub, 'post_delete', 'post', postId, now),
   ]);
   return json({ ok: true, deletedAt: now });
 }
