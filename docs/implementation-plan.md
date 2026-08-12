@@ -572,3 +572,19 @@ Google 로그인 state는 10분 후 만료되고 callback에서 즉시 삭제한
 - state 만료·불일치: 새 로그인 flow로 재시도
 - Firebase role 미등록: 비공개 D1 `admin_roles` 확인
 - 세션 저장 실패: Worker Secret과 D1 `admin_sessions`만 확인
+
+
+## Secret Scanning alert remediation
+
+The public static configuration must contain only the non-secret Worker API base URL. Firebase project settings, Firebase Web API keys, Google OAuth credentials, refresh tokens, PINs, passwords, and encryption keys are not allowed in config.js, HTML, JavaScript, CSS, Content files, or GitHub Pages artifacts.
+
+When GitHub Secret Scanning detects a historical Firebase key:
+
+1. Do not copy the detected value into a new commit, issue, comment, workflow log, or chat.
+2. Confirm the current main branch and deployed static artifact no longer contain Firebase configuration. The verification workflow enforces this for config.js and scans the repository for common Firebase credential patterns.
+3. In Google Cloud Console, revoke or rotate the detected key. Restrict any replacement key to the Firebase services and approved application origins if it must exist for another trusted integration.
+4. Keep the replacement Firebase Web API key only as the encrypted Cloudflare Worker Secret FIREBASE_WEB_API_KEY. Never place it in GitHub repository files or GitHub Actions logs.
+5. Review Google Cloud and Firebase audit logs for use of the exposed key.
+6. After rotation or revocation, close the GitHub Secret Scanning alert with the reason revoked or resolved. Closing the alert does not restore the old key and must happen only after step 3.
+
+The old value may remain in immutable Git history, but it is unusable after revocation. Rewriting public history is not part of the normal remediation because it can break deployed references and does not replace key revocation.
