@@ -127,7 +127,7 @@ async function getPost(request, env, postId) {
   }
   const media = await env.DB.prepare('SELECT id, file_name, mime_type, size_bytes, content_url FROM post_media WHERE post_id = ? ORDER BY file_name').bind(postId).all();
   const origin = new URL(request.url).origin;
-  return json({ item: { ...row, media: (media.results || []).map((file) => ({ ...file, url: file.content_url || `${origin}/api/media/${postId}/${file.id}` })) } });
+  return json({ item: { ...row, media: (media.results || []).map((file) => ({ ...file, url: file.content_url ? (file.content_url.startsWith('http') ? file.content_url : origin + file.content_url) : `${origin}/api/media/${postId}/${file.id}` })) } });
 }
 
 async function listAdminPosts(env) {
