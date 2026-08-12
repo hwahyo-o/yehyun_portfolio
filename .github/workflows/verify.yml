@@ -40,6 +40,7 @@ jobs:
           test -f worker/schema/003_admin_sessions.sql
           test -f worker/schema/004_firebase_google_login.sql
           test -f worker/schema/005_activity_events.sql
+          test -f worker/schema/006_visitor_sessions.sql
           grep -q '/api/auth/google/start' worker/src/index.js
           grep -q 'activity_events' worker/src/index.js
           grep -q 'crons = ["0 11 * * *"]' worker/wrangler.toml
