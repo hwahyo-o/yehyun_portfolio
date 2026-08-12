@@ -339,6 +339,32 @@
             <div class="backup-list-heading"><strong>백업 파일</strong><span id="backup-list-status">확인 중</span></div>
             <ol class="backup-list" id="backup-list"><li class="empty-state">백업 목록을 불러오는 중입니다.</li></ol>
           </div>
+          <div class="settings-section">
+            <div class="settings-section-heading"><div><h3>게시물 Content 배포</h3><p>HTML, CSS, JavaScript만 검증 후 GitHub Content 폴더에 게시합니다. 이미지·동영상 원본은 다음 Drive 단계에서 연결됩니다.</p></div><i class="bi bi-file-earmark-code" aria-hidden="true"></i></div>
+            <form id="admin-post-form" class="admin-post-form">
+              <label>분류
+                <select name="type" required>
+                  <option value="Graphic">Graphic</option>
+                  <option value="UX/UI">UX/UI</option>
+                  <option value="Video">Video</option>
+                </select>
+              </label>
+              <label>제목<input name="title" maxlength="120" required></label>
+              <label>설명<textarea name="description" maxlength="2000"></textarea></label>
+              <label>HTML<textarea name="html" maxlength="200000" required spellcheck="false"></textarea></label>
+              <label>CSS<textarea name="css" maxlength="200000" required spellcheck="false"></textarea></label>
+              <label>JavaScript<textarea name="js" maxlength="200000" required spellcheck="false"></textarea></label>
+              <label class="form-check"><input class="form-check-input" type="checkbox" name="isPrivate"> 비공개 게시물</label>
+              <label>게시 상태
+                <select name="status">
+                  <option value="draft">임시 저장</option>
+                  <option value="published">게시</option>
+                </select>
+              </label>
+              <button class="btn btn-primary rounded-pill" type="submit">Content 배포 <i class="bi bi-cloud-arrow-up" aria-hidden="true"></i></button>
+              <p class="form-status" id="publish-post-status" role="status"></p>
+            </form>
+          </div>
         </section>
       </div>
       <div class="loading-layer" id="loading-layer" aria-label="Portfolio loading">
