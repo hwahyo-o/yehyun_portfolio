@@ -5,6 +5,8 @@ compatibility_date = "2026-08-12"
 [vars]
 FIREBASE_PROJECT_ID = "yehyun-portfolio"
 ALLOWED_ORIGIN = "https://hwahyo-o.github.io"
+FRONTEND_URL = "https://hwahyo-o.github.io/yehyun_portfolio"
+GOOGLE_REDIRECT_URI = "https://YOUR_WORKER_SUBDOMAIN.workers.dev/oauth/google/callback"
 
 [[d1_databases]]
 binding = "DB"
