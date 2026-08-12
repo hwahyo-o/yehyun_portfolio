@@ -9,6 +9,7 @@ FRONTEND_URL = "https://hwahyo-o.github.io/yehyun_portfolio"
 GITHUB_REPOSITORY = "hwahyo-o/yehyun_portfolio"
 GITHUB_BRANCH = "main"
 GOOGLE_REDIRECT_URI = "https://yehyun-portfolio-api.ajas03974.workers.dev/oauth/google/callback"
+GOOGLE_LOGIN_REDIRECT_URI = "https://yehyun-portfolio-api.ajas03974.workers.dev/oauth/google/login-callback"
 
 [[d1_databases]]
 binding = "DB"
