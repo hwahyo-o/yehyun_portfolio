@@ -293,3 +293,44 @@ Gate: CI, HTTP, 브라우저 결과를 각각 분리 기록하고 모두 필요�
 - 실제 URL/Worker 확인
 - 불필요한 브랜치 정리
 - 최종 md 문서에 비밀값 없이 재현 가능한 운영 절차 기록
+
+
+## 11. 2026-08-12 진행 기록
+
+### 완료된 drill 변경
+
+- 계획 문서를 현재 요구사항 기준으로 갱신했다.
+- 기존 레이아웃을 유지한 Community와 Contact 화면을 추가했다.
+- Light/Dark theme 토글과 localStorage 저장을 추가했다.
+- API가 없는 상태에서도 화면이 깨지지 않는 offline fallback을 추가했다.
+- D1 초기 스키마를 추가했다.
+- Cloudflare Worker 공개 API, CORS, Firebase ID token/JWKS 검증, Guestbook hash, DM polling API 경계를 추가했다.
+- Google Drive OAuth state, callback, refresh token 암호화 저장 흐름을 추가했다.
+- Google Drive 미디어 프록시는 공개 게시물 권한과 Range 응답 헤더를 확인하도록 구성했다.
+- GitHub Pages workflow가 Content 디렉터리를 artifact에 포함하도록 갱신했다.
+- verify workflow가 Worker 문법과 비밀값 패턴을 함께 검사하도록 갱신했다.
+
+### 현재 확인되지 않은 외부 상태
+
+- Cloudflare Worker와 D1이 실제로 생성되었는지
+- D1 migration이 실제 계정에 적용되었는지
+- Google OAuth consent screen/client가 생성되었는지
+- Worker secret이 등록되었는지
+- Firebase Email/Password 관리자 계정과 admin_roles가 설정되었는지
+- 실제 Worker URL로 API와 media proxy가 동작하는지
+- GitHub Actions 결과가 연결된 현재 connector에서 반환되는지
+
+### 다음 구현 전 운영 설정
+
+사용자가 직접 외부 콘솔에서 다음을 완료해야 한다.
+
+1. Cloudflare D1 database를 생성한다.
+2. Cloudflare Worker를 생성하거나 GitHub 연동 배포를 준비한다.
+3. Worker URL이 정해지면 `GOOGLE_REDIRECT_URI=https://<worker>/oauth/google/callback`을 설정한다.
+4. Google Cloud Console에서 Drive API와 OAuth Web client를 설정한다.
+5. Cloudflare Worker Secret에 OAuth client secret과 `GOOGLE_TOKEN_ENCRYPTION_KEY`를 등록한다.
+6. Firebase Console에서 Email/Password를 활성화하고 관리자 계정을 만든다.
+7. D1에 관리자 UID를 `admin_roles`로 등록한다.
+8. Worker URL을 정적 앱의 non-secret API base 설정으로 연결한다.
+
+비밀값은 채팅으로 전달하지 않고 각 콘솔의 Secret 입력란에 직접 입력한다.
