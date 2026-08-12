@@ -895,3 +895,22 @@ Gate: 모든 CI 성공, 브라우저 console에 미해결 오류 없음, 실제 
 ## 29. 2026-08-12 운영 재현 후 추가 수정
 
 운영 Worker에 잘못된 비밀번호를 보내면 Firebase가 정상적으로 401을 반환했지만, 성공 인증 뒤 실행되는 Firebase `accounts:lookup` 토큰 검증 호출에는 타임아웃이 빠져 있었다. 이 호출이 지연되면 프런트가 성공 세션을 받지 못해 로그인 중 상태가 지속될 수 있으므로 `fetchWithTimeout`(10초)을 적용했다. drill Actions 정적 검증은 성공했으며, 운영자 브라우저에서 올바른 계정으로 최종 확인한다.
+
+
+## 30. 2026-08-13 CSP·세션 확인 콘솔 정리 계획
+
+### 문제별 수정 계획
+
+1. `frame-ancestors`는 HTML meta CSP에서 무시되므로 meta 정책에서 제거한다. 실제 framing 차단이 필요하면 배포 응답 헤더에서 별도로 관리한다.
+2. Bootstrap source map 요청이 CSP `connect-src`에 막히는 개발 도구 경고를 제거하기 위해 jsDelivr를 connect-src에 명시적으로 허용한다. 이는 CSS 본체 로딩과 인증 요청에는 영향을 주지 않는다.
+3. 초기 관리자 세션 확인의 401은 비로그인 상태의 정상 응답이므로 인증 실패로 오인하지 않도록 코드 주석과 문서의 의미를 명확히 한다. 보안상 비로그인 세션을 2xx로 바꾸지 않는다.
+
+### Process Phase / Gate
+
+- Phase A: index.html CSP를 수정하고 정적 정책 문자열에 금지 directive가 없는지 확인한다.
+- Phase B: drill Actions의 정적 검증이 성공해야 한다.
+- Phase C: Pages 배포 후 CSP와 세션 요청을 운영 주소에서 확인한다. 401은 비로그인 초기 확인의 정상 결과이며 실제 로그인 POST/Google callback과 구분한다.
+
+### 실패 시 재수정 Loop 및 검증 절차
+
+정적 검증 실패 시 CSP 문자열과 HTML 문법을 수정하여 drill Actions를 재실행한다. 배포 후 source map 경고가 남으면 브라우저가 새 HTML을 수신했는지 확인하고, 인증 요청 실패가 별도로 재현되면 해당 POST/callback 응답만 다음 원인 분석 대상으로 삼는다. API 키·Client Secret 등 민감정보는 문서와 코드에 기록하지 않는다.
