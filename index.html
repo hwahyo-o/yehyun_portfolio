@@ -5,6 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="description" content="Yang Ye Hyun portfolio">
     <link rel="preconnect" href="https://cdn.jsdelivr.net">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-sRIl4kxILFvY47J16cr9ZwB07vP4J8+LH7qKQnuqkuIAvNWLzeN8tE5YBujZqJLB" crossorigin="anonymous">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.13.1/font/bootstrap-icons.min.css">
     <link rel="icon" href="./public/portfolio-favicon.png" type="image/png">
     <link rel="stylesheet" href="./styles.css">
     <title>YeHyun — Portfolio 2026</title>
@@ -17,9 +19,9 @@
             <img src="./public/yehyun_logo.png" alt="YeHyun">
           </button>
           <nav aria-label="Portfolio categories">
-            <button data-route="category/UX%2FUI">UX/UI <span aria-hidden="true">↓</span></button>
-            <button data-route="category/Graphic">Graphic <span aria-hidden="true">↓</span></button>
-            <button data-route="category/Video">Video <span aria-hidden="true">↓</span></button>
+            <button data-route="category/UX%2FUI">UX/UI <i class="bi bi-arrow-down-short" aria-hidden="true"></i></button>
+            <button data-route="category/Graphic">Graphic <i class="bi bi-arrow-down-short" aria-hidden="true"></i></button>
+            <button data-route="category/Video">Video <i class="bi bi-arrow-down-short" aria-hidden="true"></i></button>
           </nav>
         </header>
 
@@ -66,7 +68,7 @@
           <section class="work-section ux-section" id="works" aria-labelledby="uxui-title">
             <div class="section-heading">
               <h2 id="uxui-title">UX/UI</h2>
-              <button class="view-more" data-route="category/UX%2FUI">View More <span aria-hidden="true">→</span></button>
+              <button class="view-more btn" data-route="category/UX%2FUI">View More <i class="bi bi-arrow-right" aria-hidden="true"></i></button>
             </div>
             <div class="work-rail work-rail-featured">
               <article class="featured-work-card">
@@ -95,7 +97,7 @@
           <section class="film-section" aria-labelledby="film-title">
             <div class="section-heading film-heading">
               <h2 id="film-title">Film</h2>
-              <button class="view-more view-more-light" data-route="category/Video">View More <span aria-hidden="true">→</span></button>
+              <button class="view-more view-more-light btn" data-route="category/Video">View More <i class="bi bi-arrow-right" aria-hidden="true"></i></button>
             </div>
             <div class="work-rail film-rail">
               <article class="film-card">
@@ -166,13 +168,13 @@
             </div>
           </section>
 
-          <button class="top-button" data-action="top">TOP <span aria-hidden="true">↑</span></button>
+          <button class="top-button btn" data-action="top">TOP <i class="bi bi-arrow-up" aria-hidden="true"></i></button>
         </main>
 
         <main class="page page-content category-page" id="category-page" data-page="category" hidden>
           <section class="category-hero">
             <button class="project-thumb project-thumb-prev" data-project-nav="previous" disabled aria-label="이전 작업물">
-              <span class="project-thumb-media" data-media-slot="category-previous">Previous</span>
+              <span class="project-thumb-media" data-media-slot="category-previous"><i class="bi bi-arrow-left" aria-hidden="true"></i><span class="visually-hidden">Previous</span></span>
               <small>Previous</small>
             </button>
             <div class="category-title">
@@ -181,7 +183,7 @@
               <span id="category-period">제작 기간: 추후 입력</span>
             </div>
             <button class="project-thumb project-thumb-next" data-project-nav="next" disabled aria-label="다음 작업물">
-              <span class="project-thumb-media" data-media-slot="category-next">Next</span>
+              <span class="project-thumb-media" data-media-slot="category-next"><i class="bi bi-arrow-right" aria-hidden="true"></i><span class="visually-hidden">Next</span></span>
               <small>Next</small>
             </button>
           </section>
@@ -202,15 +204,15 @@
           </section>
           <div class="bottom-project-nav">
             <button class="project-nav-card" data-project-nav="previous" disabled>
-              <span class="project-nav-thumb" data-media-slot="bottom-previous">←</span>
+              <span class="project-nav-thumb" data-media-slot="bottom-previous"><i class="bi bi-arrow-left" aria-hidden="true"></i></span>
               <span><small>Previous project</small><strong>이전 작업물</strong></span>
             </button>
             <button class="project-nav-card project-nav-card-next" data-project-nav="next" disabled>
               <span><small>Next project</small><strong>다음 작업물</strong></span>
-              <span class="project-nav-thumb" data-media-slot="bottom-next">→</span>
+              <span class="project-nav-thumb" data-media-slot="bottom-next"><i class="bi bi-arrow-right" aria-hidden="true"></i></span>
             </button>
           </div>
-          <button class="top-button" data-action="top">TOP <span aria-hidden="true">↑</span></button>
+          <button class="top-button btn" data-action="top">TOP <i class="bi bi-arrow-up" aria-hidden="true"></i></button>
         </main>
 
         <footer class="site-footer" aria-hidden="true">
