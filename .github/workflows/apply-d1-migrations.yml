@@ -38,9 +38,16 @@ jobs:
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           command: d1 execute yehyun-portfolio --remote --file=worker/schema/002_admin_backups_notifications.sql
 
+      - name: Apply administrator session schema
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: d1 execute yehyun-portfolio --remote --file=worker/schema/003_admin_sessions.sql
+
       - name: Verify required tables
         uses: cloudflare/wrangler-action@v3
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          command: d1 execute yehyun-portfolio --remote --command="SELECT name FROM sqlite_master WHERE type='table' AND name IN ('posts','admin_roles','backups','admin_notifications') ORDER BY name;"
+          command: d1 execute yehyun-portfolio --remote --command="SELECT name FROM sqlite_master WHERE type='table' AND name IN ('posts','admin_roles','backups','admin_notifications','admin_sessions') ORDER BY name;"
