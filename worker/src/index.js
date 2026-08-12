@@ -15,6 +15,12 @@ async function route(request, env) {
   const url = new URL(request.url);
   try {
     if (url.pathname === '/health') return json({ ok: true, service: 'yehyun-portfolio-api' });
+    if (url.pathname === '/api/auth/login' && request.method === 'POST') return loginAdmin(request, env);
+    if (url.pathname === '/api/auth/session' && request.method === 'GET') {
+      const claims = await requireAdmin(request, env);
+      return json({ user: { uid: claims.sub, email: claims.email || null } });
+    }
+    if (url.pathname === '/api/auth/logout' && request.method === 'POST') return logoutAdmin(request, env);
     if (url.pathname === '/api/admin/drive/start' && request.method === 'GET') return startGoogleDriveOAuth(request, env);
     if (url.pathname === '/oauth/google/callback' && request.method === 'GET') return finishGoogleDriveOAuth(request, env);
     if (url.pathname === '/api/posts' && request.method === 'GET') return listPosts(request, env);
@@ -532,12 +538,107 @@ async function getDriveAccessToken(env) {
 }
 
 async function requireAdmin(request, env) {
+  const sessionToken = readCookie(request, 'portfolio_admin_session');
+  if (sessionToken) {
+    const sessionId = await hashSessionToken(sessionToken);
+    const row = await env.DB.prepare('SELECT id, uid, email, refresh_token_ciphertext, refresh_token_iv FROM admin_sessions WHERE id = ?').bind(sessionId).first();
+    if (!row) throw httpError('AUTH_REQUIRED', '관리자 로그인이 필요합니다.', 401);
+    try {
+      const refreshToken = await decryptSecret(row.refresh_token_ciphertext, row.refresh_token_iv, env.SESSION_ENCRYPTION_KEY);
+      const refreshed = await refreshFirebaseToken(refreshToken, env);
+      const claims = await verifyFirebaseToken(refreshed.idToken, env);
+      if (claims.sub !== row.uid || !await isAdmin(claims.sub, env)) throw httpError('FORBIDDEN', '관리자 권한이 없습니다.', 403);
+      if (refreshed.refreshToken && refreshed.refreshToken !== refreshToken) {
+        const encrypted = await encryptSecret(refreshed.refreshToken, env.SESSION_ENCRYPTION_KEY);
+        await env.DB.prepare('UPDATE admin_sessions SET refresh_token_ciphertext = ?, refresh_token_iv = ?, updated_at = ? WHERE id = ?')
+          .bind(encrypted.ciphertext, encrypted.iv, new Date().toISOString(), sessionId).run();
+      } else {
+        await env.DB.prepare('UPDATE admin_sessions SET updated_at = ? WHERE id = ?').bind(new Date().toISOString(), sessionId).run();
+      }
+      return claims;
+    } catch (error) {
+      await env.DB.prepare('DELETE FROM admin_sessions WHERE id = ?').bind(sessionId).run();
+      if (error.code === 'FORBIDDEN') throw error;
+      throw httpError('AUTH_REQUIRED', '관리자 로그인이 만료되었습니다.', 401);
+    }
+  }
   const token = getBearer(request);
-  if (!token) throw httpError('AUTH_REQUIRED', '관리자 인증이 필요합니다.', 401);
+  if (!token) throw httpError('AUTH_REQUIRED', '관리자 로그인이 필요합니다.', 401);
   const claims = await verifyFirebaseToken(token, env);
-  const allowed = env.ADMIN_UIDS ? env.ADMIN_UIDS.split(',').map((uid) => uid.trim()).includes(claims.sub) : await env.DB.prepare('SELECT 1 FROM admin_roles WHERE uid = ?').bind(claims.sub).first();
-  if (!allowed) throw httpError('FORBIDDEN', '관리자 권한이 없습니다.', 403);
+  if (!await isAdmin(claims.sub, env)) throw httpError('FORBIDDEN', '관리자 권한이 없습니다.', 403);
   return claims;
+}
+
+async function isAdmin(uid, env) {
+  if (env.ADMIN_UIDS) return env.ADMIN_UIDS.split(',').map((value) => value.trim()).includes(uid);
+  const row = await env.DB.prepare('SELECT 1 FROM admin_roles WHERE uid = ?').bind(uid).first();
+  return Boolean(row);
+}
+
+async function loginAdmin(request, env) {
+  const body = await request.json().catch(() => ({}));
+  const email = String(body.email || '').trim();
+  const password = String(body.password || '');
+  if (!email || password.length < 1 || password.length > 256) {
+    throw httpError('AUTH_FAILED', '이메일 또는 비밀번호를 확인해주세요.', 401);
+  }
+  if (!env.FIREBASE_WEB_API_KEY || !env.SESSION_ENCRYPTION_KEY) {
+    throw httpError('AUTH_NOT_CONFIGURED', '관리자 로그인을 사용할 수 없습니다.', 503);
+  }
+  const response = await fetch('https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=' + encodeURIComponent(env.FIREBASE_WEB_API_KEY), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email, password, returnSecureToken: true }),
+  });
+  if (!response.ok) throw httpError('AUTH_FAILED', '이메일 또는 비밀번호를 확인해주세요.', 401);
+  const payload = await response.json();
+  const claims = await verifyFirebaseToken(payload.idToken, env);
+  if (!await isAdmin(claims.sub, env)) throw httpError('FORBIDDEN', '관리자 권한이 없습니다.', 403);
+  const rawSession = crypto.randomUUID() + crypto.randomUUID();
+  const encrypted = await encryptSecret(payload.refreshToken, env.SESSION_ENCRYPTION_KEY);
+  await env.DB.prepare('INSERT INTO admin_sessions (id, uid, email, refresh_token_ciphertext, refresh_token_iv, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)')
+    .bind(await hashSessionToken(rawSession), claims.sub, email, encrypted.ciphertext, encrypted.iv, new Date().toISOString(), new Date().toISOString()).run();
+  return withCookie(json({ user: { uid: claims.sub, email } }), rawSession);
+}
+
+async function logoutAdmin(request, env) {
+  const rawSession = readCookie(request, 'portfolio_admin_session');
+  if (rawSession) await env.DB.prepare('DELETE FROM admin_sessions WHERE id = ?').bind(await hashSessionToken(rawSession)).run();
+  return clearCookie(json({ ok: true }));
+}
+
+async function refreshFirebaseToken(refreshToken, env) {
+  const response = await fetch('https://securetoken.googleapis.com/v1/token?key=' + encodeURIComponent(env.FIREBASE_WEB_API_KEY), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({ grant_type: 'refresh_token', refresh_token: refreshToken }),
+  });
+  if (!response.ok) throw httpError('AUTH_REQUIRED', '관리자 로그인이 만료되었습니다.', 401);
+  const payload = await response.json();
+  return { idToken: payload.id_token, refreshToken: payload.refresh_token || refreshToken };
+}
+
+async function hashSessionToken(value) {
+  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(value));
+  return encode(new Uint8Array(digest));
+}
+
+function readCookie(request, name) {
+  const header = request.headers.get('Cookie') || '';
+  const match = header.split(';').map((item) => item.trim()).find((item) => item.startsWith(name + '='));
+  return match ? decodeURIComponent(match.slice(name.length + 1)) : '';
+}
+
+function withCookie(response, value) {
+  const headers = new Headers(response.headers);
+  headers.set('Set-Cookie', 'portfolio_admin_session=' + encodeURIComponent(value) + '; Max-Age=315360000; Path=/; HttpOnly; Secure; SameSite=None');
+  return new Response(response.body, { status: response.status, headers });
+}
+
+function clearCookie(response) {
+  const headers = new Headers(response.headers);
+  headers.set('Set-Cookie', 'portfolio_admin_session=; Max-Age=0; Path=/; HttpOnly; Secure; SameSite=None');
+  return new Response(response.body, { status: response.status, headers });
 }
 
 async function optionalAdmin(request, env) {
@@ -639,7 +740,13 @@ function httpError(code, publicMessage, status) {
 }
 
 function json(payload, status = 200) {
-  return new Response(JSON.stringify(payload), { status, headers: { 'Content-Type': 'application/json; charset=utf-8' } });
+  return new Response(JSON.stringify(payload), {
+    status,
+    headers: {
+      'Content-Type': 'application/json; charset=utf-8',
+      'Cache-Control': 'no-store',
+    },
+  });
 }
 
 function withCors(response, origin, env) {
@@ -647,9 +754,10 @@ function withCors(response, origin, env) {
   const headers = new Headers(response.headers);
   if (origin === allowedOrigin) {
     headers.set('Access-Control-Allow-Origin', origin);
+    headers.set('Access-Control-Allow-Credentials', 'true');
     headers.set('Vary', 'Origin');
   }
-  headers.set('Access-Control-Allow-Headers', 'Authorization, Content-Type, Range');
+  headers.set('Access-Control-Allow-Headers', 'Content-Type, Range');
   headers.set('Access-Control-Allow-Methods', 'GET, POST, PATCH, DELETE, OPTIONS');
   return new Response(response.body, { status: response.status, headers });
 }
