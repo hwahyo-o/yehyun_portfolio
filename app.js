@@ -211,7 +211,11 @@ async function apiRequest(path, options = {}) {
     headers: { ...(await authHeaders()), ...(options.headers || {}) },
   });
   const payload = await response.json().catch(() => ({}));
-  if (!response.ok) throw new Error(payload.error?.message || '요청을 처리하지 못했습니다.');
+  if (!response.ok) {
+    const error = new Error(payload.error?.message || '요청을 처리하지 못했습니다.');
+    error.code = payload.error?.code || 'REQUEST_FAILED';
+    throw error;
+  }
   return payload;
 }
 
@@ -563,8 +567,10 @@ function bindAdminActions() {
       });
       adminLoginForm.reset();
       await verifyAdminSession();
-    } catch {
-      adminLoginStatus.textContent = '이메일 또는 비밀번호를 확인해주세요.';
+    } catch (error) {
+      adminLoginStatus.textContent = error.code === 'FORBIDDEN'
+        ? '관리자 권한이 등록되지 않은 계정입니다.'
+        : error.message || '로그인 요청에 실패했습니다.';
     }
   });
   document.addEventListener('visibilitychange', checkAutoBackup);
