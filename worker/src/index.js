@@ -133,8 +133,9 @@ async function route(request, env, ctx, visitorId) {
     }
     return json({ error: { code: 'NOT_FOUND', message: '요청 경로를 찾을 수 없습니다.' } }, 404);
   } catch (error) {
-    console.error('request_failed', { code: error.code || 'INTERNAL_ERROR', status: error.status || 500 });
-    return json({ error: { code: error.code || 'INTERNAL_ERROR', message: error.publicMessage || '서버 오류가 발생했습니다.' } }, error.status || 500);
+    const code = error.code || 'INTERNAL_ERROR';
+    console.error('request_failed', { code, status: error.status || 500 });
+    return json({ error: { code, message: error.publicMessage || publicMessageForCode(code) } }, error.status || 500);
   }
 }
 
@@ -599,6 +600,14 @@ async function finishGoogleDriveOAuth(request, env) {
   return oauthRedirect(env, 'admin-drive-connected');
 }
 
+function firebaseRequestUri(env) {
+  try {
+    return new URL(env.FRONTEND_URL || 'https://hwahyo-o.github.io/yehyun_portfolio').origin;
+  } catch {
+    return 'https://hwahyo-o.github.io';
+  }
+}
+
 function oauthRedirect(env, status) {
   const origin = env.FRONTEND_URL || 'https://hwahyo-o.github.io/yehyun_portfolio';
   return new Response(null, { status: 302, headers: { Location: `${origin}/#${status}` } });
@@ -1009,7 +1018,7 @@ async function finishFirebaseGoogleLogin(request, env) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         postBody: new URLSearchParams({ id_token: googleToken.id_token, providerId: 'google.com' }).toString(),
-        requestUri: env.FRONTEND_URL || 'https://hwahyo-o.github.io/yehyun_portfolio',
+        requestUri: firebaseRequestUri(env),
         returnSecureToken: true,
         returnIdpCredential: false,
         autoCreate: true,
@@ -1021,6 +1030,9 @@ async function finishFirebaseGoogleLogin(request, env) {
     const reason = String(firebaseError.error?.message || '');
     if (reason.includes('EMAIL_EXISTS') || reason.includes('FEDERATED_USER_ID_ALREADY_LINKED')) {
       return oauthRedirect(env, 'admin-google-login-link-required');
+    }
+    if (reason.includes('OPERATION_NOT_ALLOWED') || reason.includes('INVALID_PROVIDER_ID')) {
+      return oauthRedirect(env, 'admin-google-login-provider-disabled');
     }
     return oauthRedirect(env, 'admin-google-login-provider-error');
   }
@@ -1040,9 +1052,20 @@ async function finishFirebaseGoogleLogin(request, env) {
     headers.set('Location', (env.FRONTEND_URL || 'https://hwahyo-o.github.io/yehyun_portfolio') + (isAdministrator ? '/#admin-google-login-success' : '/#visitor-google-login-success'));
     return new Response(null, { status: 302, headers });
   } catch (error) {
-    if (error.code === 'FORBIDDEN') return oauthRedirect(env, 'admin-google-login-forbidden');
-    return oauthRedirect(env, 'admin-google-login-error');
+    return oauthRedirect(env, googleErrorFragment(error.code));
   }
+}
+
+function googleErrorFragment(code) {
+  const fragments = {
+    AUTH_NOT_CONFIGURED: 'admin-google-login-not-configured',
+    CERTS_UNAVAILABLE: 'admin-google-login-certificates-error',
+    INVALID_TOKEN: 'admin-google-login-token-error',
+    SECRET_CONFIG_INVALID: 'admin-google-login-secret-error',
+    SESSION_STORE_FAILED: 'admin-google-login-session-error',
+    FORBIDDEN: 'admin-google-login-forbidden',
+  };
+  return fragments[code] || 'admin-google-login-error';
 }
 
 async function loginAdmin(request, env) {
@@ -1246,10 +1269,16 @@ async function optionalAdmin(request, env) {
 }
 
 async function verifyFirebaseToken(token, env) {
-  const parts = token.split('.');
+  const parts = String(token || '').split('.');
   if (parts.length !== 3) throw httpError('INVALID_TOKEN', '인증 토큰이 올바르지 않습니다.', 401);
-  const header = JSON.parse(decode(parts[0]));
-  const claims = JSON.parse(decode(parts[1]));
+  let header;
+  let claims;
+  try {
+    header = JSON.parse(decode(parts[0]));
+    claims = JSON.parse(decode(parts[1]));
+  } catch {
+    throw httpError('INVALID_TOKEN', '인증 토큰이 올바르지 않습니다.', 401);
+  }
   const now = Math.floor(Date.now() / 1000);
   if (header.alg !== 'RS256' || !header.kid) {
     throw httpError('INVALID_TOKEN', '인증 토큰 알고리즘이 올바르지 않습니다.', 401);
@@ -1466,6 +1495,16 @@ function isSafeId(value) {
 function getBearer(request) {
   const value = request.headers.get('Authorization') || '';
   return value.startsWith('Bearer ') ? value.slice(7).trim() : '';
+}
+
+function publicMessageForCode(code) {
+  const messages = {
+    INTERNAL_ERROR: '인증 서버 처리 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요.',
+    CERTS_UNAVAILABLE: 'Firebase 인증서를 확인할 수 없습니다. 잠시 후 다시 시도해주세요.',
+    SECRET_CONFIG_INVALID: '서버 보안 설정이 올바르지 않습니다. 운영 설정을 확인해주세요.',
+    ADMIN_LOGIN_REQUIRED: '관리자 계정은 관리자 로그인 화면에서 인증해주세요.',
+  };
+  return messages[code] || '인증 서버 처리 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요.';
 }
 
 function httpError(code, publicMessage, status) {

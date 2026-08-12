@@ -759,3 +759,46 @@ Gate: 모든 CI 성공, 브라우저 console에 미해결 오류 없음, 실제 
 - 이 작업 환경의 GitHub connector에는 branch delete API가 노출되지 않아 drill과 기존 keep 브랜치 삭제를 자동 수행할 수 없었다. 저장소 관리자 권한으로 아래 작업을 1회 실행해 main만 남긴다.
   git push origin --delete drill keep
 - Firebase Provider, Worker Secret, Firestore 권한은 외부 콘솔에서 운영자가 확인해야 한다.
+
+
+## 23. 2026-08-12 로그인 오류 재진단 Phase
+
+### 증상
+
+- Google OAuth callback이 Firebase Provider 단계에서 실패할 때 동일한 일반 오류 fragment로 축약될 수 있다.
+- 이메일 로그인에서 Worker 내부의 토큰 검증·세션 암호화·D1 저장 오류가 화면의 일반 서버 오류로 축약될 수 있다.
+
+### 수정 목표
+
+- 비밀번호·토큰·Secret 원문을 노출하지 않고 인증 단계별 안전한 오류 코드를 유지한다.
+- Google OAuth 교환, Firebase Provider, Firebase 토큰 검증, 세션 저장 단계를 화면 메시지와 구분한다.
+- 구성 누락·인증서 조회 실패·세션 암호화 실패가 `INTERNAL_ERROR`로 뭉개지지 않도록 Worker 공통 오류 매핑을 둔다.
+
+### Gate
+
+- Worker 문법·정적 Secret 검사가 성공한다.
+- 잘못된 이메일 요청은 `AUTH_FAILED`를 반환한다.
+- 설정 누락은 `AUTH_NOT_CONFIGURED` 또는 Google 전용 설정 코드로 반환한다.
+- Google Provider 실패와 기존 계정 연결 필요 상태가 서로 다른 안전한 fragment로 반환된다.
+- 정상 관리자 인증 성공 여부는 운영자가 실제 화면에서 확인한다.
+
+### 외부 확인
+
+- Firebase Authentication의 Email/Password 및 Google Provider 활성화
+- Google OAuth Web Client callback URI와 Firebase authorized domain
+- Worker Secret 이름과 길이·형식만 확인하고 값은 문서화하지 않는다.
+
+
+## 24. 로그인 오류 재진단 구현 결과
+
+- Worker 공통 오류 응답이 알 수 없는 예외도 `INTERNAL_ERROR` 코드와 안전한 사용자 메시지로 일관되게 반환하도록 보강했다.
+- Firebase JWT header/payload 파싱 실패를 일반 서버 오류가 아닌 `INVALID_TOKEN` 계열로 변환했다.
+- Google OAuth의 Firebase `requestUri`를 Pages origin으로 정규화해 authorized domain 검증 실패 가능성을 줄였다.
+- Google Provider 비활성화와 기존 Firebase 계정 연결 필요 상태를 서로 다른 callback fragment로 구분했다.
+- 비밀값·토큰·Firebase 원문 응답은 로그와 화면에 노출하지 않는다.
+
+### 검증
+
+- drill 최신 정적 검증 성공: Worker 문법, app.js 문법, migration 파일, Secret 패턴 검사
+- 운영 브라우저 화면 확인은 사용자가 직접 수행한다.
+- 실제 관리자 성공 로그인 여부는 Firebase 계정·Provider·Secret의 운영 상태에 종속되므로 화면 확인 결과에 따라 다음 재수정 Loop를 시작한다.

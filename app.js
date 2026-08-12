@@ -211,6 +211,10 @@ const authErrorMessages = {
   AUTH_TOKEN_VERIFY_FAILED: '로그인 토큰을 확인할 수 없습니다. 다시 시도해주세요.',
   SESSION_STORE_FAILED: '로그인 세션을 저장하지 못했습니다. 잠시 후 다시 시도해주세요.',
   AUTH_FAILED: '이메일 또는 비밀번호를 확인해주세요.',
+  INTERNAL_ERROR: '인증 서버 처리 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요.',
+  CERTS_UNAVAILABLE: 'Firebase 인증서를 확인할 수 없습니다. 잠시 후 다시 시도해주세요.',
+  SECRET_CONFIG_INVALID: '서버 보안 설정이 올바르지 않습니다. 운영 설정을 확인해주세요.',
+  ADMIN_LOGIN_REQUIRED: '관리자 계정은 관리자 로그인 화면에서 인증해주세요.',
   AUTH_REQUIRED: '관리자 로그인이 필요합니다.',
   CSRF_BLOCKED: '허용되지 않은 요청입니다. 페이지를 새로고침한 뒤 다시 시도해주세요.',
   FORBIDDEN: '관리자 권한이 등록되지 않은 계정입니다.',
@@ -613,6 +617,12 @@ function handleGoogleLoginCallback() {
     'admin-google-login-link-required': '기존 Firebase 이메일 계정과 Google 계정 연결이 필요합니다. 먼저 이메일 로그인 계정에 Google 제공자를 연결해주세요.',
     'admin-google-login-oauth-error': 'Google OAuth 교환에 실패했습니다. Redirect URI와 OAuth Client 설정을 확인해주세요.',
     'admin-google-login-provider-error': 'Firebase Google Provider 인증에 실패했습니다. Provider 활성화와 계정 연결을 확인해주세요.',
+    'admin-google-login-provider-disabled': 'Firebase Google Provider가 비활성화되어 있습니다. Firebase Authentication 설정을 확인해주세요.',
+    'admin-google-login-not-configured': 'Google 로그인 서버 설정이 완료되지 않았습니다.',
+    'admin-google-login-certificates-error': 'Firebase 인증서를 확인할 수 없습니다. 잠시 후 다시 시도해주세요.',
+    'admin-google-login-token-error': 'Google 인증 토큰을 확인할 수 없습니다. 다시 시도해주세요.',
+    'admin-google-login-secret-error': '서버 보안 설정이 올바르지 않습니다. 운영 설정을 확인해주세요.',
+    'admin-google-login-session-error': '로그인 세션을 저장하지 못했습니다. 잠시 후 다시 시도해주세요.',
     'admin-google-login-error': 'Google 로그인에 실패했습니다. 설정을 확인해주세요.',
   };
   if (!messages[result]) return;
