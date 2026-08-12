@@ -40,6 +40,14 @@ jobs:
           wranglerVersion: "4.121.0"
           command: d1 execute yehyun-portfolio --remote --file=worker/schema/005_activity_events.sql
 
+      - name: Apply visitor session schema
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          wranglerVersion: "4.121.0"
+          command: d1 execute yehyun-portfolio --remote --file=worker/schema/006_visitor_sessions.sql
+
       - name: Verify Firebase Google login table
         uses: cloudflare/wrangler-action@v3
         with:
