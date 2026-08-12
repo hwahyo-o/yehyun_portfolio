@@ -798,3 +798,288 @@ button:focus-visible { outline: 2px solid var(--ink); outline-offset: 4px; }
   .hero-frame .gallery-title-decoration { font-size: clamp(2.8rem, 14vw, 5rem); }
   .gallery-pagination-ornament { bottom: -34px; transform: translateX(-50%) scale(.82); transform-origin: center bottom; }
 }
+
+
+/* Interactive portfolio foundation: shared content surface and theme tokens */
+:root {
+  --portfolio-primary: #8f99fb;
+  --portfolio-bg: #fff;
+  --portfolio-text: #333;
+  --portfolio-card: #f8f9fa;
+  --portfolio-border: #e0e0e0;
+  --portfolio-shadow: 0 4px 12px rgba(0,0,0,.05);
+  --portfolio-radius: 12px;
+  --portfolio-container: 1200px;
+}
+body {
+  color: var(--portfolio-text);
+  background: var(--portfolio-bg);
+  transition: color .2s ease, background-color .2s ease;
+}
+.gnb {
+  flex-wrap: wrap;
+}
+.gnb-tools {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+}
+.gnb-tool {
+  min-height: 34px;
+  padding: 6px 12px;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  color: var(--ink);
+  font-size: .74rem;
+  font-weight: 800;
+}
+.gnb-tool:hover,
+.gnb-tool:focus-visible {
+  border-color: var(--portfolio-primary);
+  color: var(--portfolio-primary);
+}
+.gnb-admin-tool {
+  border-color: var(--portfolio-border);
+}
+.content-section {
+  width: 100%;
+  max-width: var(--portfolio-container);
+  margin: 0 auto;
+  padding: 96px 20px;
+}
+.content-section-heading {
+  align-items: end;
+  margin-bottom: 32px;
+}
+.content-section-heading h2 {
+  margin: 8px 0 0;
+  color: var(--portfolio-text);
+  font-size: clamp(2rem, 5vw, 4rem);
+  letter-spacing: -.07em;
+}
+.content-section-heading .section-label {
+  display: inline-block;
+  margin: 0;
+  padding-left: 10px;
+  border-left: 5px solid var(--portfolio-primary);
+  color: var(--portfolio-primary);
+  font-size: .78rem;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+.section-note {
+  color: var(--muted);
+  font-size: .78rem;
+}
+.community-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 2fr);
+  gap: 24px;
+}
+.update-panel,
+.guestbook-panel,
+.contact-card,
+.chat-panel {
+  border: 1px solid var(--portfolio-border);
+  border-radius: var(--portfolio-radius);
+  background: var(--portfolio-card);
+  box-shadow: var(--portfolio-shadow);
+}
+.update-panel,
+.guestbook-panel {
+  padding: 24px;
+}
+.panel-heading,
+.chat-panel-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+.panel-heading h3 {
+  margin: 0;
+  font-size: 1.15rem;
+}
+.panel-status {
+  color: var(--muted);
+  font-size: .72rem;
+}
+.update-list,
+.guestbook-list {
+  display: grid;
+  gap: 16px;
+  margin: 24px 0 0;
+  padding: 0;
+  list-style: none;
+}
+.update-list li {
+  position: relative;
+  padding-left: 18px;
+  border-left: 2px solid var(--portfolio-primary);
+}
+.update-list strong,
+.guestbook-list strong {
+  display: block;
+  margin-bottom: 4px;
+}
+.update-list time,
+.guestbook-list time {
+  color: var(--muted);
+  font-size: .72rem;
+}
+.update-list p,
+.guestbook-list p {
+  margin: 6px 0 0;
+  color: var(--muted);
+  font-size: .85rem;
+  line-height: 1.55;
+}
+.empty-state {
+  color: var(--muted);
+  font-size: .82rem;
+}
+.guestbook-form,
+.chat-form {
+  display: grid;
+  gap: 12px;
+  margin-top: 20px;
+}
+.guestbook-form label {
+  display: grid;
+  gap: 6px;
+  color: var(--muted);
+  font-size: .75rem;
+  font-weight: 800;
+}
+.guestbook-form input,
+.guestbook-form textarea,
+.chat-form input {
+  width: 100%;
+  border: 1px solid var(--portfolio-border);
+  border-radius: 8px;
+  padding: 10px 12px;
+  color: var(--portfolio-text);
+  background: var(--portfolio-bg);
+}
+.form-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+.guestbook-form .btn {
+  justify-self: start;
+}
+.guestbook-list {
+  max-height: 420px;
+  overflow: auto;
+}
+.guestbook-item {
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--portfolio-border);
+}
+.contact-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+.contact-card {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  min-height: 120px;
+  padding: 24px;
+  color: var(--portfolio-text);
+  text-decoration: none;
+  transition: transform .2s ease, border-color .2s ease;
+}
+.contact-card:hover,
+.contact-card:focus-within {
+  border-color: var(--portfolio-primary);
+  transform: translateY(-5px);
+}
+.contact-card > i:first-child {
+  color: var(--portfolio-primary);
+  font-size: 1.8rem;
+}
+.contact-card > span {
+  display: grid;
+  gap: 4px;
+  flex: 1;
+}
+.contact-card small {
+  color: var(--muted);
+}
+.chat-panel {
+  max-width: 620px;
+  margin: 18px 0 0 auto;
+  padding: 20px;
+}
+.chat-messages {
+  display: grid;
+  gap: 8px;
+  min-height: 80px;
+  max-height: 280px;
+  margin: 18px 0;
+  overflow: auto;
+}
+.chat-message {
+  max-width: 80%;
+  padding: 9px 12px;
+  border-radius: 12px;
+  font-size: .84rem;
+}
+.chat-message.is-me {
+  justify-self: end;
+  color: #fff;
+  background: var(--portfolio-primary);
+}
+.chat-message.is-admin {
+  justify-self: start;
+  background: var(--portfolio-bg);
+}
+.chat-form {
+  grid-template-columns: 1fr auto;
+}
+body[data-theme="dark"] {
+  --portfolio-bg: #121212;
+  --portfolio-text: #f0f0f0;
+  --portfolio-card: #1e1e1e;
+  --portfolio-border: #333;
+  --portfolio-shadow: 0 4px 16px rgba(0,0,0,.35);
+  --ink: #f0f0f0;
+  --muted: #b5b5b5;
+}
+body[data-theme="dark"] .gnb,
+body[data-theme="dark"] .resume-panel,
+body[data-theme="dark"] .contact-card,
+body[data-theme="dark"] .guestbook-form input,
+body[data-theme="dark"] .guestbook-form textarea,
+body[data-theme="dark"] .chat-form input,
+body[data-theme="dark"] .chat-message.is-admin {
+  background: var(--portfolio-card);
+  color: var(--portfolio-text);
+}
+body[data-theme="dark"] .loading-screen,
+body[data-theme="dark"] .film-section {
+  background: var(--portfolio-bg);
+}
+@media (max-width: 768px) {
+  .community-grid,
+  .contact-grid {
+    grid-template-columns: 1fr;
+  }
+}
+@media (max-width: 620px) {
+  .gnb-tools {
+    width: 100%;
+    justify-content: flex-end;
+  }
+  .content-section {
+    padding-top: 72px;
+    padding-bottom: 72px;
+  }
+  .form-row {
+    grid-template-columns: 1fr;
+  }
+}
