@@ -127,7 +127,7 @@ async function getPost(request, env, postId) {
   }
   const media = await env.DB.prepare('SELECT id, file_name, mime_type, size_bytes, content_url FROM post_media WHERE post_id = ? ORDER BY file_name').bind(postId).all();
   const origin = new URL(request.url).origin;
-  return json({ item: { ...row, media: (media.results || []).map((file) => ({ ...file, url: file.content_url || `${origin}/api/media/${postId}/${file.id}` })) } });
+  return json({ item: { ...row, media: (media.results || []).map((file) => ({ ...file, url: file.content_url ? (file.content_url.startsWith('http') ? file.content_url : origin + file.content_url) : `${origin}/api/media/${postId}/${file.id}` })) } });
 }
 
 async function listAdminPosts(env) {
@@ -138,8 +138,7 @@ async function listAdminPosts(env) {
 }
 
 async function createAdminPost(request, env, claims) {
-  const body = await request.json().catch(() => ({}));
-  const input = validatePostInput(body);
+  const { input, mediaFiles } = await readPostInput(request);
   if (!env.GITHUB_CONTENT_TOKEN || !env.GITHUB_REPOSITORY) {
     throw httpError('CONTENT_PUBLISH_NOT_CONFIGURED', 'Content 배포 설정이 필요합니다.', 503);
   }
@@ -151,35 +150,129 @@ async function createAdminPost(request, env, claims) {
   const jobId = crypto.randomUUID();
   await env.DB.batch([
     env.DB.prepare('INSERT INTO posts (id, type, title, description, body_html, is_private, status, content_path, published_at, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
-      .bind(id, input.type, input.title, input.description, input.html, input.isPrivate ? 1 : 0, 'backup_pending', contentPath, input.status === 'published' ? now : null, now, now),
+      .bind(id, input.type, input.title, input.description, input.html, input.isPrivate ? 1 : 0, 'backup_pending', contentPath, null, now, now),
     env.DB.prepare('INSERT INTO upload_jobs (id, post_id, status, created_at, updated_at) VALUES (?, ?, ?, ?, ?)')
       .bind(jobId, id, 'pending', now, now),
   ]);
 
   try {
+    const drive = await uploadDrivePostAssets(env, id, input.title, now, input, mediaFiles);
+    const origin = new URL(request.url).origin;
+    const renderedHtml = rewriteMediaReferences(input.html, drive.mediaRows, origin);
+    const manifest = drive.mediaRows.map((item) => ({
+      fileName: item.fileName,
+      mimeType: item.mimeType,
+      sizeBytes: item.sizeBytes,
+      url: item.contentUrl,
+    }));
+    await env.DB.batch([
+      ...drive.mediaRows.map((item) => env.DB.prepare('INSERT INTO post_media (id, post_id, file_name, mime_type, size_bytes, drive_file_id, content_url, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
+        .bind(item.id, id, item.fileName, item.mimeType, item.sizeBytes, item.driveFileId, item.contentUrl, now)),
+      env.DB.prepare('UPDATE posts SET body_html = ?, updated_at = ? WHERE id = ?').bind(renderedHtml, new Date().toISOString(), id),
+      env.DB.prepare("UPDATE upload_jobs SET status = 'drive_backed_up', drive_folder_id = ?, updated_at = ? WHERE id = ?").bind(drive.folderId, new Date().toISOString(), jobId),
+    ]);
+
     const files = [
-      { path: contentPath + '/index.html', value: input.html },
+      { path: contentPath + '/index.html', value: renderedHtml },
       { path: contentPath + '/style.css', value: input.css },
       { path: contentPath + '/script.js', value: input.js },
-      { path: contentPath + '/media-manifest.json', value: JSON.stringify(input.media) },
+      { path: contentPath + '/media-manifest.json', value: JSON.stringify(manifest) },
     ];
     let commitSha = '';
     for (const file of files) {
       commitSha = await putGitHubContent(env, file.path, file.value, 'content: publish ' + id);
     }
+    const publishedAt = input.status === 'published' ? new Date().toISOString() : null;
     await env.DB.batch([
       env.DB.prepare("UPDATE upload_jobs SET status = 'content_committed', github_commit_sha = ?, updated_at = ? WHERE id = ?").bind(commitSha, new Date().toISOString(), jobId),
-      env.DB.prepare("UPDATE posts SET status = ?, updated_at = ? WHERE id = ?").bind(input.status, new Date().toISOString(), id),
+      env.DB.prepare("UPDATE posts SET status = ?, published_at = ?, updated_at = ? WHERE id = ?").bind(input.status, publishedAt, new Date().toISOString(), id),
       env.DB.prepare('INSERT INTO audit_logs (id, uid, action, entity_type, entity_id, created_at) VALUES (?, ?, ?, ?, ?, ?)')
         .bind(crypto.randomUUID(), claims.sub, 'content_publish', 'post', id, new Date().toISOString()),
     ]);
-    return json({ item: { id, contentPath, status: input.status }, uploadJobId: jobId }, 201);
+    return json({ item: { id, contentPath, status: input.status, media: manifest }, uploadJobId: jobId }, 201);
   } catch (error) {
     await env.DB.prepare("UPDATE upload_jobs SET status = 'failed', error_code = ?, updated_at = ? WHERE id = ?")
       .bind(error.code || 'CONTENT_PUBLISH_FAILED', new Date().toISOString(), jobId).run();
-    await env.DB.prepare("UPDATE posts SET status = 'draft', updated_at = ? WHERE id = ?").bind(new Date().toISOString(), id).run();
+    await env.DB.prepare("UPDATE posts SET status = 'draft', published_at = NULL, updated_at = ? WHERE id = ?").bind(new Date().toISOString(), id).run();
+    if (error.code === 'DRIVE_NOT_CONFIGURED' || error.code === 'DRIVE_AUTH_FAILED') throw error;
     throw httpError('CONTENT_PUBLISH_FAILED', 'Content 배포에 실패했습니다. 업로드 상태를 확인해주세요.', 502);
   }
+}
+
+async function readPostInput(request) {
+  const contentType = request.headers.get('Content-Type') || '';
+  if (!contentType.toLowerCase().includes('multipart/form-data')) {
+    const body = await request.json().catch(() => ({}));
+    return { input: validatePostInput(body), mediaFiles: [] };
+  }
+  const form = await request.formData();
+  const body = {
+    type: form.get('type'),
+    title: form.get('title'),
+    description: form.get('description'),
+    html: form.get('html'),
+    css: form.get('css'),
+    js: form.get('js'),
+    status: form.get('status'),
+    isPrivate: form.get('isPrivate') === 'on',
+    media: [],
+  };
+  const files = form.getAll('media').filter((value) => value && typeof value.arrayBuffer === 'function' && typeof value.name === 'string');
+  return { input: validatePostInput(body), mediaFiles: validateMediaFiles(files) };
+}
+
+function validateMediaFiles(files) {
+  if (files.length > 20) throw httpError('INVALID_MEDIA', '미디어 파일은 게시물당 20개까지 업로드할 수 있습니다.', 400);
+  let total = 0;
+  return files.map((file) => {
+    const name = cleanFileName(file.name);
+    const mimeType = String(file.type || '').toLowerCase();
+    const sizeBytes = Number(file.size) || 0;
+    const limit = mimeType.startsWith('video/') ? 50 * 1024 * 1024 : 10 * 1024 * 1024;
+    if (!mimeType.startsWith('image/') && !mimeType.startsWith('video/')) throw httpError('INVALID_MEDIA', '이미지와 동영상만 업로드할 수 있습니다.', 400);
+    if (!sizeBytes || sizeBytes > limit) throw httpError('INVALID_MEDIA', '미디어 파일 크기 제한을 초과했습니다.', 400);
+    total += sizeBytes;
+    if (total > 80 * 1024 * 1024) throw httpError('INVALID_MEDIA', '게시물 전체 미디어 크기 제한을 초과했습니다.', 400);
+    return { file, fileName: name, mimeType, sizeBytes };
+  });
+}
+
+async function uploadDrivePostAssets(env, postId, title, iso, input, mediaFiles) {
+  const token = await getDriveAccessToken(env);
+  const rootId = await getOrCreateDriveFolder(token, 'Portfolio-con');
+  const dateId = await getOrCreateDriveFolder(token, kstDateFolder(iso), rootId);
+  const postIdFolder = await getOrCreateDriveFolder(token, slugify(title) + '-' + postId.slice(0, 8), dateId);
+  const originals = [
+    { fileName: 'index.html', mimeType: 'text/html; charset=utf-8', bytes: new TextEncoder().encode(input.html) },
+    { fileName: 'style.css', mimeType: 'text/css; charset=utf-8', bytes: new TextEncoder().encode(input.css) },
+    { fileName: 'script.js', mimeType: 'text/javascript; charset=utf-8', bytes: new TextEncoder().encode(input.js) },
+  ];
+  for (const original of originals) {
+    await uploadDriveFile(token, original.fileName, original.mimeType, original.bytes, postIdFolder);
+  }
+  const mediaRows = [];
+  for (const item of mediaFiles) {
+    const id = crypto.randomUUID();
+    const driveFile = await uploadDriveFile(token, item.fileName, item.mimeType, await item.file.arrayBuffer(), postIdFolder);
+    mediaRows.push({
+      id,
+      fileName: item.fileName,
+      mimeType: item.mimeType,
+      sizeBytes: item.sizeBytes,
+      driveFileId: driveFile.id,
+      contentUrl: '/api/media/' + postId + '/' + id,
+    });
+  }
+  return { folderId: postIdFolder, mediaRows };
+}
+
+function rewriteMediaReferences(source, mediaRows, origin) {
+  return mediaRows.reduce((value, item) => value.split(item.fileName).join(origin + item.contentUrl), source);
+}
+
+function kstDateFolder(iso) {
+  const date = new Date(iso);
+  return new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Seoul', year: 'numeric', month: '2-digit', day: '2-digit' }).format(date);
 }
 
 async function updateAdminPost(request, env, postId) {
@@ -605,6 +698,25 @@ async function getOrCreateDriveFolder(token, name, parentId = null) {
   if (!response.ok) throw httpError('DRIVE_FOLDER_CREATE_FAILED', 'Google Drive 폴더를 생성하지 못했습니다.', 502);
   const payload = await response.json();
   return payload.id;
+}
+
+async function uploadDriveFile(token, fileName, mimeType, bytes, parentId) {
+  const boundary = 'portfolio_file_' + crypto.randomUUID();
+  const metadata = JSON.stringify({ name: fileName, parents: [parentId] });
+  const header = '--' + boundary + '\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n' + metadata
+    + '\r\n--' + boundary + '\r\nContent-Type: ' + mimeType + '\r\n\r\n';
+  const footer = '\r\n--' + boundary + '--';
+  const body = new Blob([header, bytes, footer]);
+  const response = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,name,mimeType,size', {
+    method: 'POST',
+    headers: {
+      Authorization: 'Bearer ' + token,
+      'Content-Type': 'multipart/related; boundary=' + boundary,
+    },
+    body,
+  });
+  if (!response.ok) throw httpError('DRIVE_UPLOAD_FAILED', '원본 파일을 Google Drive에 저장하지 못했습니다.', 502);
+  return response.json();
 }
 
 async function uploadDriveJson(token, fileName, payload, parentId) {

@@ -438,3 +438,38 @@ Gate: CI, HTTP, 브라우저 결과를 각각 분리 기록하고 모두 필요�
 - 업로드 HTML 외부 실행 경로 차단
 - PR CI와 보안 diff 검증 통과
 - main 병합 후 Pages/Worker 배포 성공
+
+## 16. 2026-08-12 Google Drive 원본·미디어 Phase
+
+### 저장 규칙
+
+`Portfolio-con/YYYY-MM-DD/<게시물 slug>/`에 다음을 저장한다.
+
+- 원본 `index.html`
+- 원본 `style.css`
+- 원본 `script.js`
+- 관리자 업로드 이미지·동영상 원본
+
+GitHub `Content/**`에는 실행에 필요한 HTML/CSS/JS와 `media-manifest.json`만 커밋한다. 대용량 원본은 커밋하지 않는다.
+
+### 처리 순서
+
+1. 관리자 세션 확인
+2. multipart 파일 수·MIME·크기 검증
+3. Drive 폴더 생성 또는 재사용
+4. 원본 파일과 미디어를 Drive에 업로드
+5. D1 `post_media`에 Drive file ID 기록
+6. HTML/CSS/JS의 허용된 상대 미디어 참조를 Worker 미디어 URL로 변환
+7. GitHub `Content/**`에 실행 파일과 manifest 커밋
+8. `posts`와 `upload_jobs`를 published 상태로 전환
+
+Drive 업로드 또는 GitHub 커밋 중 하나가 실패하면 게시물을 published로 전환하지 않는다. Drive에 이미 저장된 파일은 삭제하지 않고 재시도 가능한 `upload_jobs.failed` 상태로 남긴다.
+
+### 용량 정책
+
+- 이미지: 파일당 최대 10MB
+- 동영상: 파일당 최대 50MB
+- 한 게시물 전체 미디어: 최대 80MB
+- 게시물당 미디어 파일: 최대 20개
+- 허용 MIME: `image/*`, `video/*`
+- 브라우저 제한은 보조 수단이며 Worker가 최종 검증한다.
