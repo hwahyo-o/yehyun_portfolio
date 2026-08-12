@@ -222,19 +222,34 @@ async function readPostInput(request) {
 }
 
 function validateMediaFiles(files) {
+  const imageFiles = files.filter((file) => String(file.type || '').toLowerCase().startsWith('image/'));
+  const videoFiles = files.filter((file) => String(file.type || '').toLowerCase().startsWith('video/'));
   if (files.length > 20) throw httpError('INVALID_MEDIA', '미디어 파일은 게시물당 20개까지 업로드할 수 있습니다.', 400);
+  if (imageFiles.length > 10) throw httpError('INVALID_MEDIA', '이미지는 게시물당 최대 10개까지 업로드할 수 있습니다.', 400);
+  if (videoFiles.length > 5) throw httpError('INVALID_MEDIA', '동영상은 게시물당 최대 5개까지 업로드할 수 있습니다.', 400);
+
   let total = 0;
-  return files.map((file) => {
+  let imageTotal = 0;
+  let videoTotal = 0;
+  const result = files.map((file) => {
     const name = cleanFileName(file.name);
     const mimeType = String(file.type || '').toLowerCase();
     const sizeBytes = Number(file.size) || 0;
-    const limit = mimeType.startsWith('video/') ? 50 * 1024 * 1024 : 10 * 1024 * 1024;
     if (!mimeType.startsWith('image/') && !mimeType.startsWith('video/')) throw httpError('INVALID_MEDIA', '이미지와 동영상만 업로드할 수 있습니다.', 400);
-    if (!sizeBytes || sizeBytes > limit) throw httpError('INVALID_MEDIA', '미디어 파일 크기 제한을 초과했습니다.', 400);
+    if (!sizeBytes) throw httpError('INVALID_MEDIA', '빈 미디어 파일은 업로드할 수 없습니다.', 400);
     total += sizeBytes;
-    if (total > 80 * 1024 * 1024) throw httpError('INVALID_MEDIA', '게시물 전체 미디어 크기 제한을 초과했습니다.', 400);
+    if (mimeType.startsWith('image/')) imageTotal += sizeBytes;
+    if (mimeType.startsWith('video/')) videoTotal += sizeBytes;
     return { file, fileName: name, mimeType, sizeBytes };
   });
+
+  const mixed = imageFiles.length > 0 && videoFiles.length > 0;
+  const mediaLimit = mixed ? 120 * 1024 * 1024 : 100 * 1024 * 1024;
+  if (imageTotal > 100 * 1024 * 1024) throw httpError('INVALID_MEDIA', '이미지 전체 용량은 100MB까지입니다.', 400);
+  if (videoTotal > 100 * 1024 * 1024) throw httpError('INVALID_MEDIA', '동영상 전체 용량은 100MB까지입니다.', 400);
+  if (total > mediaLimit) throw httpError('INVALID_MEDIA', mixed ? '이미지와 동영상 혼합 업로드는 120MB까지입니다.' : '미디어 업로드는 100MB까지입니다.', 400);
+  if (total > 150 * 1024 * 1024) throw httpError('INVALID_MEDIA', '게시물 전체 용량은 150MB까지입니다.', 400);
+  return result;
 }
 
 async function uploadDrivePostAssets(env, postId, title, iso, input, mediaFiles) {
