@@ -41,3 +41,39 @@ The media endpoint checks D1 visibility before requesting the private Drive file
 ## Required user action before live deployment
 
 The repository code can be reviewed without credentials. Live deployment requires the repository owner to create the D1 database, create the Worker, configure Google OAuth redirect URIs, and enter secrets in Cloudflare. Those values must be entered in the provider consoles, not sent in chat.
+
+
+## D1 migration and administrator setup
+
+The `admin_roles` table is created by `schema/001_initial.sql`. If the D1 Console says `no such table: admin_roles`, the migration has not been applied yet.
+
+In Cloudflare Dashboard:
+
+1. Open Workers & Pages → D1 → `yehyun-portfolio`.
+2. Open the Console tab.
+3. Copy and run the complete contents of `worker/schema/001_initial.sql`.
+4. Confirm that the command completes without an error.
+5. Run the administrator insert only after the schema succeeds:
+
+```sql
+INSERT INTO admin_roles (uid, email, created_at)
+VALUES ('YOUR_FIREBASE_ADMIN_UID', 'YOUR_ADMIN_EMAIL', datetime('now'));
+```
+
+Do not add an administrator UID or email to the public repository. The value belongs in the private D1 database.
+
+## Creating GOOGLE_TOKEN_ENCRYPTION_KEY
+
+This secret is not a Firebase key and is not a Google OAuth client ID. It is a private 32-byte key used by the Worker to encrypt the Google Drive refresh token before storing it in D1.
+
+In PowerShell, run this locally:
+
+```powershell
+$bytes = New-Object byte[] 32
+[System.Security.Cryptography.RandomNumberGenerator]::Create().GetBytes($bytes)
+[Convert]::ToBase64String($bytes)
+```
+
+Copy the resulting single-line Base64 value directly into the Cloudflare Worker Secret named `GOOGLE_TOKEN_ENCRYPTION_KEY`. Do not commit it or send it in chat. Keep the same value permanently; changing it makes previously stored Drive refresh tokens unreadable.
+
+Also add `GOOGLE_CLIENT_SECRET` as a Worker Secret using the secret shown once by Google Cloud when the OAuth Web Client was created. Do not put it in `wrangler.toml`, GitHub, or the browser.
