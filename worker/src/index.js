@@ -968,9 +968,9 @@ async function finishFirebaseGoogleLogin(request, env) {
       redirect_uri: env.GOOGLE_LOGIN_REDIRECT_URI || '',
     }),
   });
-  if (!tokenResponse.ok) return oauthRedirect(env, 'admin-google-login-error');
+  if (!tokenResponse.ok) return oauthRedirect(env, 'admin-google-login-oauth-error');
   const googleToken = await tokenResponse.json();
-  if (!googleToken.id_token) return oauthRedirect(env, 'admin-google-login-error');
+  if (!googleToken.id_token) return oauthRedirect(env, 'admin-google-login-oauth-error');
 
   const firebaseResponse = await fetch(
     'https://identitytoolkit.googleapis.com/v1/accounts:signInWithIdp?key=' + encodeURIComponent(env.FIREBASE_WEB_API_KEY || ''),
@@ -992,11 +992,11 @@ async function finishFirebaseGoogleLogin(request, env) {
     if (reason.includes('EMAIL_EXISTS') || reason.includes('FEDERATED_USER_ID_ALREADY_LINKED')) {
       return oauthRedirect(env, 'admin-google-login-link-required');
     }
-    return oauthRedirect(env, 'admin-google-login-error');
+    return oauthRedirect(env, 'admin-google-login-provider-error');
   }
   const firebasePayload = await firebaseResponse.json();
   if (!firebasePayload.idToken || !firebasePayload.refreshToken || !firebasePayload.localId) {
-    return oauthRedirect(env, 'admin-google-login-error');
+    return oauthRedirect(env, 'admin-google-login-provider-error');
   }
 
   try {
