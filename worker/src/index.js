@@ -1,7 +1,5 @@
-const FIREBASE_JWKS_URL = 'https://www.googleapis.com/service_accounts/v1/jwk/securetoken@system.gserviceaccount.com';
 const FIRESTORE_TOKEN_URL = 'https://oauth2.googleapis.com/token';
 const FIRESTORE_SCOPE = 'https://www.googleapis.com/auth/datastore';
-let certificateCache = { expiresAt: 0, keys: new Map() };
 let firestoreTokenCache = { accessToken: '', expiresAt: 0 };
 
 export default {
@@ -1269,56 +1267,30 @@ async function optionalAdmin(request, env) {
 }
 
 async function verifyFirebaseToken(token, env) {
-  const parts = String(token || '').split('.');
-  if (parts.length !== 3) throw httpError('INVALID_TOKEN', '인증 토큰이 올바르지 않습니다.', 401);
-  let header;
-  let claims;
-  try {
-    header = JSON.parse(decode(parts[0]));
-    claims = JSON.parse(decode(parts[1]));
-  } catch {
-    throw httpError('INVALID_TOKEN', '인증 토큰이 올바르지 않습니다.', 401);
+  if (!env.FIREBASE_WEB_API_KEY) {
+    throw httpError('AUTH_NOT_CONFIGURED', 'Firebase 인증 설정이 필요합니다.', 503);
   }
-  const now = Math.floor(Date.now() / 1000);
-  if (header.alg !== 'RS256' || !header.kid) {
-    throw httpError('INVALID_TOKEN', '인증 토큰 알고리즘이 올바르지 않습니다.', 401);
+  const response = await fetch(
+    'https://identitytoolkit.googleapis.com/v1/accounts:lookup?key=' + encodeURIComponent(env.FIREBASE_WEB_API_KEY),
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ idToken: String(token || '') }),
+    },
+  );
+  if (!response.ok) {
+    throw httpError('AUTH_TOKEN_VERIFY_FAILED', '로그인 토큰을 확인할 수 없습니다.', 401);
   }
-  if (!claims.sub || claims.aud !== env.FIREBASE_PROJECT_ID || claims.iss !== `https://securetoken.google.com/${env.FIREBASE_PROJECT_ID}` || claims.exp <= now) {
-    throw httpError('INVALID_TOKEN', '인증 토큰이 만료되었거나 올바르지 않습니다.', 401);
+  const payload = await response.json().catch(() => ({}));
+  const user = payload.users?.[0];
+  if (!user?.localId || user.disabled) {
+    throw httpError('AUTH_TOKEN_VERIFY_FAILED', '로그인 토큰을 확인할 수 없습니다.', 401);
   }
-  const keys = await getFirebaseCertificates();
-  const certificate = keys.get(header.kid);
-  if (!certificate) throw httpError('INVALID_TOKEN', '인증서가 올바르지 않습니다.', 401);
-  const verified = await crypto.subtle.verify({ name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256' }, certificate, decodeBytes(parts[2]), decodeBytes(parts[0] + '.' + parts[1]));
-  if (!verified) throw httpError('INVALID_TOKEN', '인증 토큰 서명이 올바르지 않습니다.', 401);
-  return claims;
-}
-
-async function getFirebaseCertificates() {
-  if (certificateCache.expiresAt > Date.now()) return certificateCache.keys;
-  const response = await fetch(FIREBASE_JWKS_URL);
-  if (!response.ok) throw httpError('CERTS_UNAVAILABLE', '인증서를 불러오지 못했습니다.', 503);
-  const payload = await response.json();
-  const keys = new Map();
-  await Promise.all((payload.keys || []).map(async (jwk) => keys.set(jwk.kid, await importJwk(jwk))));
-  const maxAge = Number((response.headers.get('Cache-Control') || '').match(/max-age=(\d+)/)?.[1] || 3600);
-  certificateCache = { expiresAt: Date.now() + maxAge * 1000, keys };
-  return keys;
-}
-
-async function importJwk(jwk) {
-  return crypto.subtle.importKey('jwk', jwk, { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256' }, false, ['verify']);
-}
-
-function decode(value) {
-  return new TextDecoder().decode(decodeBytes(value));
-}
-
-function decodeBytes(value) {
-  const normalized = value.replace(/-/g, '+').replace(/_/g, '/');
-  const padded = normalized + '='.repeat((4 - normalized.length % 4) % 4);
-  const binary = atob(padded);
-  return Uint8Array.from(binary, (character) => character.charCodeAt(0));
+  return {
+    sub: user.localId,
+    email: user.email || '',
+    email_verified: user.emailVerified === true,
+  };
 }
 
 async function hashPassword(password, salt) {
