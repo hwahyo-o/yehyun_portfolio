@@ -1565,3 +1565,38 @@ Drive OAuth는 Google consent 화면과 authorization code 반환까지 성공�
 - 데스크톱·태블릿·모바일의 각 위치값을 같은 이동량으로 조정한다.
 - Gate: 확정 이동량이 모든 반응형 구간에 반영되고, title·pagination의 Swiper 연동·코너 프레임·기존 색상은 변경하지 않는다.
 - 검증: CI와 GitHub Pages 배포가 성공해야 한다. 실패 시 Gallery Hero CSS·CI 범위에서만 재수정한다.
+
+
+---
+
+## 2026-08-13 Figma GNB Header 정합화
+
+### 기준 및 범위
+
+- 설계 기준: Figma 파일 `uWvPfF4BWYEgniRXAqLvfT`, Header 노드 `12:332`.
+- 대상: `index.html > header.gnb`, 관련 `styles.css`, 정적 검증 workflow와 본 문서.
+- 비대상: Gallery, Worker, Firebase, D1, Google Drive, 라우팅·스크롤·테마·관리자 인증의 처리 로직.
+- 새 외부 의존성·Figma 임시 asset URL은 추가하지 않는다. 이미 로드된 Bootstrap Icons와 `public/yehyun_logo.png`만 사용한다.
+
+### 계층별 구조
+
+- 화면: 흰색 sticky 헤더, 1px 핑크 하단선·약한 그림자, 80×40 로고, 다섯 메뉴, 테마와 관리자 아이콘 도구를 구성한다. 데스크톱은 148px 좌우 여백과 메뉴 46px 간격을 기준으로 한다.
+- 처리: 기존 `data-route`, `data-scroll-target`, `data-action`을 보존하여 클릭 처리와 테마 전환을 변경하지 않는다.
+- 핵심 규칙: 메뉴별 Bootstrap `bi-caret-down-fill` 표시를 둥근 흰색 칩으로 감싸며, 관리자 버튼은 보이는 텍스트 대신 `bi-lock-fill`을 사용하되 접근성 이름을 제공한다.
+- 저장·외부 서비스: localStorage 테마 값과 관리자 세션·알림 연결을 변경하지 않는다.
+- 의존성·시작: `app.js`의 기존 초기화와 Bootstrap Icons CDN을 재사용한다.
+
+### Process Phase 및 Gate
+
+1. **문서 Gate** — 이 절을 구현보다 먼저 작업 브랜치에 커밋한다. 비밀값·Figma 임시 URL은 기록하지 않는다.
+2. **구조 Gate** — 로고·메뉴·도구의 의미론적 HTML과 기존 data attribute를 유지한다. 관리자 세션 도구와 알림 센터 DOM은 제거하지 않는다.
+3. **표시 Gate** — 1920px 기준 62px 헤더, 148px 여백, 46px 메뉴 간격, 흰 배경·핑크 하단선·그림자와 아이콘 칩이 Figma와 일치한다.
+4. **반응형·접근성 Gate** — 좁은 화면에서 메뉴가 안전하게 줄바꿈되고 키보드 focus·aria-label이 유지된다.
+5. **동작·배포 Gate** — route/scroll, theme, admin login/session UI가 회귀 없이 동작하며, 정적 CI와 GitHub Pages 배포 성공 뒤에만 main에 병합한다.
+
+### 실패 시 재수정 Loop 및 검증
+
+- 표시 실패는 GNB CSS·마크업 범위만 최소 수정하고 해당 viewport를 다시 확인한다.
+- 메뉴/테마/관리자 동작 실패는 data attribute와 기존 app.js handler의 연결만 복구한다. 인증·저장소 코드는 변경하지 않는다.
+- CI 실패는 실패한 정적 조건만 현재 디자인 값으로 조정한 뒤 동일 Gate를 재실행한다.
+- 검증은 HTML/CSS 정적 조건, JavaScript module syntax, 데스크톱·모바일 레이아웃, menu route/scroll, theme toggle, admin-session hidden 상태, PR CI, Pages 배포 순서로 수행한다.
