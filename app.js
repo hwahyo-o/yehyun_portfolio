@@ -1,3 +1,5 @@
+import './firebase-auth.js';
+
 const fonts = [
   'Wanted Sans',
   'Mona',
