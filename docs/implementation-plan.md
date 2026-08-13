@@ -1105,3 +1105,39 @@ CORS 오류가 남으면 Network의 OPTIONS 응답에서 allow-origin, allow-hea
 ### Free plan boundary
 
 Personal Google storage is shared and limited; uploads remain constrained to the Cloudflare Free request body limit. Files larger than the configured upload limit are rejected before storage. The system is not an unlimited video archive.
+
+
+## 39. 2026-08-13 관리자 Google·Drive 통합 연동 재구성
+
+### 문제별 수정 계획
+
+1. 현재 Google Provider 연결은 암호화된 Firebase refresh token 재발급에 의존한다. 이 외부 재발급 실패가 일반 오류로 축소되어 실제 실패 단계를 확인할 수 없다.
+2. Drive 연결은 OAuth·토큰·폴더 생성·D1 저장 중 어느 단계의 실패인지 화면에 남기지 않는다. 연결 해제 시 root 메타데이터도 함께 정리하지 않아 다음 시도에 이전 상태가 섞일 수 있다.
+3. 관리자 알림 조회 실패는 설정 화면과 독립적으로 처리해야 한다. 알림 조회 예외가 설정 초기화를 중단해서는 안 된다.
+
+### 목표와 계층별 구조
+
+- 화면: 설정에서 하나의 Google 및 Drive 연동 흐름을 제공한다. 현재 이메일/비밀번호 관리자만 시작할 수 있으며 비밀번호를 한 번 재확인한다. 비밀번호는 저장하지 않는다.
+- 처리: Worker는 재확인 비밀번호로 Firebase의 새 ID token을 발급하고, 10분짜리 일회성 D1 state에 암호화해 보관한다. Google callback에서 이 token으로 Firebase Provider를 같은 UID에 연결하고 Drive refresh token을 암호화한다.
+- 핵심 규칙: 시작·callback 모두 private D1 admin_roles allowlist를 확인한다. Google identity가 다른 Firebase UID에 연결된 경우에는 연결·Drive 저장을 모두 중단하고 안전한 안내를 반환한다.
+- 저장·외부 서비스: 성공이 확인된 뒤에만 Google Drive에 Portfolio-con 및 Backups를 준비하고 D1 root ID를 기록한다. 연결 해제는 connection과 root metadata를 함께 삭제한다.
+- 의존성·시작: 브라우저 Firebase SDK, 공개 Secret, Drive direct URL을 추가하지 않는다. 브라우저는 OAuth code·access token·refresh token을 보관하지 않는다.
+
+### Process Phase와 Gate
+
+1. 문서·기준선: 이 계획을 구현 전 커밋한다. Gate: 비밀값·이메일·UID·토큰이 문서에 없다.
+2. Worker 상태 설계: 기존 provider link/Drive state를 단일 연동 state로 교체하고 실패 단계를 code로 분리한다. Gate: state는 관리자 UID·세션·만료와 묶이며 callback 후 재사용할 수 없다.
+3. 화면 연결: 비밀번호 재확인 UI와 한 번의 Google consent 시작을 연결한다. Gate: 비밀번호는 DOM 제출 뒤 저장되지 않고 실패·취소 뒤 버튼 상태가 복구된다.
+4. Drive 준비: root 생성 성공 뒤에만 ready로 표시하고 실패면 connection/root를 rollback한다. Gate: Portfolio-con 없이는 연결됨을 표시하지 않는다.
+5. 회귀 방지: notifications 실패는 독립적으로 처리한다. Gate: 알림 API 실패에도 Drive 상태·설정 모달은 계속 표시된다.
+6. 검증·배포: 정적 검사, PR checks, Worker schema/deploy, Pages deploy, 운영자 browser flow를 분리해 확인한다. Gate: 각 증거를 혼동하지 않는다.
+
+### 실패 시 재수정 Loop 및 검증 절차
+
+- Firebase 재인증 실패: 이메일/비밀번호 로그인 설정과 해당 요청만 확인한다.
+- Provider 충돌: Firebase Console에서 이미 연결된 별도 Google provider 사용자 여부만 확인하고, 확인 전 사용자를 삭제하지 않는다.
+- OAuth 실패: redirect URI·테스트 사용자·동의 화면을 확인한다.
+- Drive 실패: token 교환, Drive API, 폴더 생성 중 해당 code만 수정한다.
+- Worker 오류: request ID/안전한 error code를 로그에 남기고 해당 handler만 수정한다.
+
+정적 검증은 Worker 문법, UI hash-message 계약, secret/UID 비노출, 상태 정리 쿼리를 검사한다. 배포 후 운영자는 이메일 관리자 로그인 → 통합 연동 → Drive의 Portfolio-con 확인 → 로그아웃 → Google 관리자 로그인을 확인한다. API key, client secret, OAuth code, access/refresh token, 비밀번호, UID는 코드·문서·Actions 로그에 기록하지 않는다.
