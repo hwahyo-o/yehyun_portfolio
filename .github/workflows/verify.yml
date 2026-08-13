@@ -53,7 +53,7 @@ jobs:
           grep -q "slidesPerView: 'auto'" app.js
           grep -q 'centeredSlides: true' app.js
           grep -q 'realIndexChange' app.js
-          grep -q 'delay: 800' app.js
+          grep -q 'delay: 1200' app.js
           ! grep -q 'gallery-track\|startGalleryLoop' app.js
           grep -q "getBearer(request) ? await requireUser(request, env) : null" worker/src/index.js
           grep -q "verifyAuthSession({ reportError: true })" app.js
