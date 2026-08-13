@@ -33,6 +33,7 @@ const categoryPage = document.querySelector('#category-page');
 const categoryName = document.querySelector('#category-name');
 const categoryDetailName = document.querySelector('#category-detail-name');
 const gallerySwiperElement = document.querySelector('#gallery-swiper');
+const galleryPaginationButtons = document.querySelectorAll('[data-gallery-page]');
 const reducedMotionQuery = window.matchMedia('(prefers-reduced-motion: reduce)');
 const apiBase = String(window.PORTFOLIO_CONFIG?.apiBase || '').replace(/\/$/, '');
 const themeToggle = document.querySelector('#theme-toggle');
@@ -182,10 +183,24 @@ function bindNameShuffle() {
   nameDisplay.addEventListener('focus', shuffleNameFont);
 }
 
+let gallerySwiper;
+
+function updateGalleryPagination(index) {
+  galleryPaginationButtons.forEach((button, buttonIndex) => {
+    const isActive = buttonIndex === index;
+    button.classList.toggle('is-active', isActive);
+    button.toggleAttribute('aria-current', isActive);
+  });
+}
+
 function initGallerySwiper() {
   if (!gallerySwiperElement || !window.Swiper || reducedMotionQuery.matches) return;
 
-  new window.Swiper(gallerySwiperElement, {
+  gallerySwiper = new window.Swiper(gallerySwiperElement, {
+    slidesPerView: 'auto',
+    centeredSlides: true,
+    spaceBetween: 100,
+    initialSlide: 2,
     loop: true,
     speed: 380,
     autoplay: {
@@ -193,6 +208,19 @@ function initGallerySwiper() {
       disableOnInteraction: false,
       pauseOnMouseEnter: false,
     },
+    breakpoints: {
+      0: { spaceBetween: 24 },
+      720: { spaceBetween: 56 },
+      1440: { spaceBetween: 100 },
+    },
+    on: {
+      init: (swiper) => updateGalleryPagination(swiper.realIndex),
+      realIndexChange: (swiper) => updateGalleryPagination(swiper.realIndex),
+    },
+  });
+
+  galleryPaginationButtons.forEach((button) => {
+    button.addEventListener('click', () => gallerySwiper.slideToLoop(Number(button.dataset.galleryPage)));
   });
 }
 

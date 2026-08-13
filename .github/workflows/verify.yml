@@ -43,7 +43,16 @@ jobs:
           grep -q 'sha384-gAPqlBuTCdtVcYt9ocMOYWrnBZ4XSL6q+4eXqwNycOr4iFczhNKtnYhF3NEXJM51' index.html
           grep -q 'class="swiper gallery-swiper"' index.html
           grep -q 'class="swiper-wrapper"' index.html
+          test -f public/gallery-title.png
+          test -f public/gallery-corner-frame.png
+          test -f public/gallery-pagination-active.png
+          grep -q 'gallery-title.png' index.html
+          grep -q 'gallery-corner-frame.png' index.html
+          grep -q 'gallery-pagination-active.png' index.html
           grep -q 'new window.Swiper' app.js
+          grep -q "slidesPerView: 'auto'" app.js
+          grep -q 'centeredSlides: true' app.js
+          grep -q 'realIndexChange' app.js
           grep -q 'delay: 800' app.js
           ! grep -q 'gallery-track\|startGalleryLoop' app.js
           grep -q "getBearer(request) ? await requireUser(request, env) : null" worker/src/index.js

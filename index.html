@@ -46,41 +46,34 @@
 
         <main class="page page-content" id="home-page" data-page="home">
           <section class="gallery-hero" aria-labelledby="gallery-title">
-            <div class="hero-side hero-side-left" aria-hidden="true"></div>
             <div class="hero-frame">
               <p class="hero-kicker">-YEHYUN COLLECTION-</p>
               <div class="gallery-stage">
-                <span class="gallery-corner gallery-corner-tl" aria-hidden="true"></span>
-                <span class="gallery-corner gallery-corner-tr" aria-hidden="true"></span>
-                <span class="gallery-corner gallery-corner-bl" aria-hidden="true"></span>
-                <span class="gallery-corner gallery-corner-br" aria-hidden="true"></span>
                 <div class="hero-media-slot">
                   <div class="swiper gallery-swiper" id="gallery-swiper" aria-label="YeHyun collection gallery">
                     <div class="swiper-wrapper">
-                      <div class="swiper-slide gallery-slide" data-media-slot="gallery-cover-01">
-                        <span>추후 대표 이미지를 연결할 수 있는 영역입니다.</span>
-                      </div>
-                      <div class="swiper-slide gallery-slide" data-media-slot="gallery-cover-02">
-                        <span>Yang Ye Hyun visual archive</span>
-                      </div>
-                      <div class="swiper-slide gallery-slide" data-media-slot="gallery-cover-03">
-                        <span>Selected work collection</span>
-                      </div>
+                      <div class="swiper-slide gallery-slide gallery-slide--violet" data-media-slot="gallery-cover-01"><span>Temporary banner 01</span></div>
+                      <div class="swiper-slide gallery-slide gallery-slide--cyan" data-media-slot="gallery-cover-02"><span>Temporary banner 02</span></div>
+                      <div class="swiper-slide gallery-slide gallery-slide--main" data-media-slot="gallery-cover-03"><span>(배너 영역 - 내가 제작했던 베너 이미지들 중에서 젤 나은 것들만 나오도록)</span></div>
+                      <div class="swiper-slide gallery-slide gallery-slide--blue" data-media-slot="gallery-cover-04"><span>Temporary banner 04</span></div>
+                      <div class="swiper-slide gallery-slide gallery-slide--pink" data-media-slot="gallery-cover-05"><span>Temporary banner 05</span></div>
                     </div>
                   </div>
                 </div>
-                <div class="gallery-pagination-ornament" aria-hidden="true">
-                  <span class="gallery-pagination-oval"></span>
-                  <span class="gallery-pagination-dots"><i></i><i></i><i></i><i></i><i></i><i></i><i></i></span>
-                  <span class="gallery-hand-phone">
-                    <span class="gallery-hand-shape"></span>
-                    <span class="gallery-phone-shape"><i></i></span>
-                  </span>
+                <img class="gallery-corner gallery-corner-tl" src="./public/gallery-corner-frame.png" alt="" aria-hidden="true">
+                <img class="gallery-corner gallery-corner-tr" src="./public/gallery-corner-frame.png" alt="" aria-hidden="true">
+                <img class="gallery-corner gallery-corner-bl" src="./public/gallery-corner-frame.png" alt="" aria-hidden="true">
+                <img class="gallery-corner gallery-corner-br" src="./public/gallery-corner-frame.png" alt="" aria-hidden="true">
+                <div class="gallery-pagination" aria-label="Gallery pagination">
+                  <button class="gallery-pagination-button" type="button" data-gallery-page="0" aria-label="Show banner 1"><img src="./public/gallery-pagination-active.png" alt=""></button>
+                  <button class="gallery-pagination-button" type="button" data-gallery-page="1" aria-label="Show banner 2"><img src="./public/gallery-pagination-active.png" alt=""></button>
+                  <button class="gallery-pagination-button is-active" type="button" data-gallery-page="2" aria-current="true" aria-label="Show banner 3"><img src="./public/gallery-pagination-active.png" alt=""></button>
+                  <button class="gallery-pagination-button" type="button" data-gallery-page="3" aria-label="Show banner 4"><img src="./public/gallery-pagination-active.png" alt=""></button>
+                  <button class="gallery-pagination-button" type="button" data-gallery-page="4" aria-label="Show banner 5"><img src="./public/gallery-pagination-active.png" alt=""></button>
                 </div>
               </div>
-              <h1 class="gallery-title-decoration" id="gallery-title">GALLERY</h1>
+              <h1 class="gallery-title-decoration" id="gallery-title"><img src="./public/gallery-title.png" alt="GALLERY"></h1>
             </div>
-            <div class="hero-side hero-side-right" aria-hidden="true"></div>
           </section>
 
           <section class="work-section ux-section" id="works" aria-labelledby="uxui-title">
