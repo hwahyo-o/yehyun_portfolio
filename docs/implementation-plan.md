@@ -1517,3 +1517,14 @@ Drive OAuth는 Google consent 화면과 authorization code 반환까지 성공�
 3. Email Gate: 카드의 외부 링크가 Gmail 편지쓰기 화면을 사용하고 새 탭·안전한 opener 정책을 적용한다.
 4. 검증 Gate: CI가 간격·자동재생·Gmail URL을 확인하고 GitHub Pages 배포가 성공한다.
 5. 실패 Loop: 실패한 Gate의 변경 파일만 최소 수정 후 같은 검증부터 반복한다.
+
+
+---
+
+## 2026-08-13 Gallery Title·Pagination 겹침값 재보정
+
+- 데스크톱: 기존 -18px에서 **-24px**으로 변경한다.
+- 태블릿·모바일: 기존 -8px에서 **-18px**으로 변경한다.
+- 범위: Gallery Hero 제목·페이지네이션의 세로 위치 CSS 및 이를 확인하는 CI만 변경한다.
+- Gate: 데스크톱과 반응형 오프셋이 각각 확정값을 사용하고, Swiper·코너 프레임·Gmail 링크는 회귀 없이 유지된다.
+- 검증 실패 시 CSS·CI 범위에서만 최소 수정 후 재검증한다.
