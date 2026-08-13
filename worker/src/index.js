@@ -1078,19 +1078,6 @@ async function finishAdminGoogleLink(env, stateRow, code) {
   }
 }
 
-function googleLinkErrorFragment(code) {
-  if (String(code || '').includes('FEDERATED_USER_ID_ALREADY_LINKED') || String(code || '').includes('EMAIL_EXISTS')) return 'admin-google-link-in-use';
-  if (String(code || '').includes('CREDENTIAL_TOO_OLD_LOGIN_AGAIN') || String(code || '').includes('INVALID_ID_TOKEN')) return 'admin-google-link-relogin';
-  const fragments = {
-    AUTH_FAILED: 'admin-google-link-relogin',
-    AUTH_UPSTREAM_TIMEOUT: 'admin-google-link-timeout',
-    AUTH_TOKEN_VERIFY_FAILED: 'admin-google-link-relogin',
-    FORBIDDEN: 'admin-google-link-forbidden',
-    GOOGLE_OAUTH_FAILED: 'admin-google-link-oauth-error',
-  };
-  return fragments[code] || 'admin-google-link-error';
-}
-
 function firebaseAuthErrorCode(payload) {
   const reason = String(payload?.error?.message || '');
   if (reason.includes('INVALID_API_KEY') || reason.includes('API_KEY_INVALID')) return 'AUTH_NOT_CONFIGURED';
