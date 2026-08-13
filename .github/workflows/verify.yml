@@ -39,6 +39,10 @@ jobs:
           grep -q 'margin-left: 0' styles.css
           grep -q 'color: #6796FF' styles.css
           grep -q 'box-shadow: 1px 2px 0 #0B5ED7' styles.css
+          grep -q 'font-size: 18px' styles.css
+          grep -q 'width: 24px' styles.css
+          grep -q 'height: 24px' styles.css
+          grep -q 'font-size: 20px; font-weight: 900' styles.css
           grep -q 'bi bi-lock-fill' index.html
           grep -q 'border-bottom: 1px solid var(--pink)' styles.css
           grep -q 'box-shadow: 1px 2px 0 #000' styles.css
