@@ -684,7 +684,7 @@ button:focus-visible { outline: 2px solid var(--ink); outline-offset: 4px; }
 .hero-frame .gallery-title-decoration {
   position: absolute;
   z-index: 5;
-  top: 662px;
+  top: 626px;
   left: 50%;
   width: 630px;
   height: 200px;
@@ -747,7 +747,7 @@ button:focus-visible { outline: 2px solid var(--ink); outline-offset: 4px; }
   .gallery-corner-tr { right: 11vw; }
   .gallery-corner-bl { top: 46vw; left: 11vw; }
   .gallery-corner-br { top: 46vw; right: 11vw; }
-  .hero-frame .gallery-title-decoration { top: 519px; width: min(62vw, 630px); height: auto; }
+  .hero-frame .gallery-title-decoration { top: 493px; width: min(62vw, 630px); height: auto; }
   .gallery-pagination { top: 358px; }
 }
 
@@ -767,7 +767,7 @@ button:focus-visible { outline: 2px solid var(--ink); outline-offset: 4px; }
   .gallery-corner-tr { right: 10vw; }
   .gallery-corner-bl { top: 49vw; left: 10vw; }
   .gallery-corner-br { top: 49vw; right: 10vw; }
-  .hero-frame .gallery-title-decoration { top: 402px; width: 82vw; }
+  .hero-frame .gallery-title-decoration { top: 376px; width: 82vw; }
   .gallery-pagination { top: 254px; transform: translateX(-50%) scale(.75); }
 }
 
