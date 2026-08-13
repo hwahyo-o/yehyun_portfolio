@@ -1079,3 +1079,29 @@ CORS 오류가 남으면 Network의 OPTIONS 응답에서 allow-origin, allow-hea
 - Provider link: 이메일 Admin 로그인 -> Google 계정 연결 -> callback success -> 로그아웃 -> Google Admin 로그인.
 - Drive: Drive 연결 -> `Portfolio-con/Backups` 생성 확인 -> 수동 백업 -> 날짜 폴더와 JSON 파일 생성 확인.
 - 실패 시 callback fragment 또는 Drive status의 안전한 code만 확인하고 해당 단계부터 반복한다. raw OAuth state, UID, token, credential, secret은 기록하지 않는다.
+
+
+## 38. 2026-08-13 Google Admin 연결·Drive 원본 저장소 재검증
+
+### 사실 확인
+
+게시물 업로드 경로에는 이미 Drive 원본 저장, YYYY-MM-DD 폴더, title slug 폴더, HTML/CSS/JS 원본, media Drive ID 기록, Worker media stream이 구현돼 있다. 현재 기능 장애는 저장 모델 부재가 아니라 Google provider link와 Drive OAuth의 실제 실패 원인을 일반 오류로 숨기는 연결 상태 설계다.
+
+### 구현
+
+- OAuth callback error 및 Firebase accounts:update/Drive API 응답을 안전한 단계별 code로 분류한다.
+- Drive connection 상태는 Drive root folder ID와 verified timestamp가 있을 때만 ready다.
+- Drive OAuth callback은 root folder 생성 실패를 connection rollback과 exact safe code로 처리한다.
+- post asset folder 이름은 YYYY-MM-DD/title-slug 구조로 통일하고 Drive ID를 D1에 저장한다.
+- media display는 Worker Drive proxy만 사용하며 token/Drive direct URL은 노출하지 않는다.
+
+### Gate
+
+1. Email admin -> Google provider link -> logout -> Google admin sign-in.
+2. Drive OAuth -> Portfolio-con exists -> connection ready.
+3. New post -> date/slug folder includes index.html/style.css/script.js/media -> post uses Worker media URL.
+4. Error path surfaces provider-in-use, OAuth denial, Drive permissions, folder creation, upload errors without secrets.
+
+### Free plan boundary
+
+Personal Google storage is shared and limited; uploads remain constrained to the Cloudflare Free request body limit. Files larger than the configured upload limit are rejected before storage. The system is not an unlimited video archive.
