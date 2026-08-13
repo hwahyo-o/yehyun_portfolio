@@ -1281,3 +1281,33 @@ Firebase config가 누락되면 UI는 로그인 요청을 보내지 않고 설�
 - Firebase token 확인이 실패하면 Cloudflare의 FIREBASE_WEB_API_KEY 존재·동일 Firebase project 여부만 확인한다.
 - D1 권한이 실패하면 Firebase Console의 실제 사용자 UID와 admin_roles의 UID 일치만 확인한다. 사용자를 삭제하거나 UID·Secret을 공개하지 않는다.
 - 배포 후 운영 검증은 이메일 관리자 로그인, Google popup 로그인, 관리자 미등록 Google Member 로그인 순으로 분리한다.
+
+
+## 46. 2026-08-13 Google Drive callback Worker 1101 수정
+
+### 관찰과 원인
+
+Drive OAuth는 Google consent 화면과 authorization code 반환까지 성공한다. callback은 drive.file만 요청했는데, 응답에 보장되지 않는 id_token에서 Google subject를 읽으려 한다. 이 예외가 callback에서 처리되지 않아 Cloudflare 1101을 반환하며, Portfolio-con root 생성 전 흐름이 중단된다.
+
+### 계층별 수정 범위
+
+- 화면: callback 실패는 frontend hash로 되돌리고 안전한 Drive 오류 메시지로 표시한다.
+- 처리: Drive connection은 OAuth state의 관리자 Firebase UID를 소유자 근거로 사용한다. Google id_token subject는 저장하지 않는다.
+- 핵심 규칙: drive.file 최소 권한을 유지하며, Drive root와 Backups가 모두 준비된 뒤에만 연결 상태를 기록한다.
+- 저장·외부 서비스: refresh token만 Worker Secret으로 암호화해 D1에 보관한다. token, code, subject, secret은 응답·문서·로그에 기록하지 않는다.
+- 의존성·시작: token 암호화, D1 저장, access token 재발급, 폴더 생성의 예외를 callback 내부에서 처리한다.
+
+### Process Phase와 Gate
+
+1. 문서 선커밋. Gate: 원인·범위·재수정 Loop가 비밀값 없이 기록된다.
+2. Callback 수정. Gate: drive.file 응답에 id_token이 없어도 Worker exception 없이 root 준비를 계속한다.
+3. 실패 경계. Gate: callback은 1101 대신 안전한 frontend fragment로 종료하고 부분 연결 metadata를 정리한다.
+4. 정적 검증. Gate: id_token subject parser가 Drive callback에 없고 Worker module 구문·dry-run이 통과한다.
+5. 운영 검증. Gate: 이메일 관리자 → Drive 연결 → 승인 → Portfolio-con/Backups 존재 → 설정의 연결됨 순서가 완료된다.
+
+### 실패 시 재수정 Loop 및 검증
+
+- token 교환 실패는 Google OAuth Client ID·Secret·redirect URI만 점검한다.
+- 암호화 실패는 GOOGLE_TOKEN_ENCRYPTION_KEY 형식만 점검한다.
+- Drive API/폴더 실패는 Drive API 활성화·drive.file 권한·해당 API 응답만 점검한다.
+- 각 실패는 callback의 안전한 fragment만 비교하며 Cloudflare 1101, raw token, OAuth code, refresh token, UID를 노출하지 않는다.
