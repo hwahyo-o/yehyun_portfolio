@@ -921,3 +921,61 @@ Gate: 모든 CI 성공, 브라우저 console에 미해결 오류 없음, 실제 
 초기 페이지에서 관리자 쿠키가 전혀 없는 경우에는 인증 실패가 아니라 “로그인하지 않음” 상태다. 이 경우에 한해 `GET /api/auth/session`이 `{ user: null }`을 200으로 반환하도록 조정하고, 프런트는 user가 있을 때만 관리자 UI를 활성화한다. 쿠키가 있으나 만료·위조된 경우에는 기존 401을 유지하여 세션 검증 실패를 숨기지 않는다.
 
 Gate: no-cookie 초기 요청 200/null, 유효 관리자 세션 200/user, 잘못된 세션 401, 관리자 보호 API 비관리자 접근 401/403을 각각 정적 코드 검사와 배포 후 운영 요청으로 확인한다.
+
+
+## 32. 2026-08-13 Firebase 역할·Member 기능·방명록 재설계 승인 계획
+
+### 확정 정책
+
+- Guest는 공개 게시물·방명록을 열람하고 Contact 이메일 링크만 사용할 수 있다.
+- 공유, 반응, Contact DM, 방명록 작성은 Google 로그인 Member 전용이다. Guest가 누르면 동작 대신 로그인 유도 모달을 표시한다.
+- Member는 Firebase UID로 신규 방명록을 작성하며 자신의 UID 글만 수정·삭제할 수 있다.
+- Admin은 Firebase 이메일/비밀번호 또는 지정 Google 계정으로 로그인한다. 관리자 판정은 공개 이메일 설정이 아니라 private D1 `admin_roles`의 Firebase UID allowlist만 사용한다.
+- 비밀번호형 방명록의 UI, API, hash/salt, 검증 로직, 데이터 열은 제거한다. 기존 글의 본문·작성일은 보존하되 작성자 UID가 없으므로 방문자 편집 대상에서 제외하며 Admin만 관리한다.
+- 지정 관리자 계정의 이메일·Firebase UID·비밀값은 저장소와 문서에 기록하지 않는다.
+
+### 계층별 범위
+
+- 화면: Member 전용 기능의 로그인 유도 모달, 로그인 뒤 원래 동작 재개, 역할별 UI 제어.
+- 처리: Firebase Google 또는 이메일/비밀번호 인증, Worker 토큰 검증, member/admin HttpOnly 세션 발급.
+- 핵심 규칙: D1 UID allowlist, Guest/Member/Admin 접근 제어, 방명록 UID 소유권.
+- 저장·외부 서비스: Firebase Auth는 신원 확인, Cloudflare Worker/D1은 역할·세션·소유권, Pages는 정적 화면을 담당한다.
+- 의존성·시작: 브라우저에는 API base만 유지하고 Secret은 Worker에서만 관리한다. 시작 시 세션을 확인한 뒤 역할별 UI를 적용한다.
+
+### Process Phase와 Gate
+
+1. 기준선 및 문서: `drill`을 main 기준으로 맞추고 본 계획을 먼저 커밋한다. Gate: 열린 PR·기존 작업 손실 없음.
+2. 운영 진단: Worker Secret 존재·형식, Firebase Provider, OAuth redirect, D1 migration을 비밀값 없이 점검한다. Gate: 이메일 503과 Google 실패 원인을 코드로 분류한다.
+3. Worker·D1: UID 기반 역할과 세션, 비밀번호형 방명록 제거 migration, UID 소유권을 구현한다. Gate: Guest 401, 타 Member 403, Admin 허용.
+4. 화면: Member 전용 모달과 로그인 뒤 재개 흐름을 연결한다. Gate: 공개 기능 회귀 없음, 권한 UI와 API가 일치한다.
+5. 검증·배포: 정적 검사, Actions, HTTP, Guest/Member/Admin 실제 흐름을 점검한다. Gate: 모두 통과한 경우만 main 병합·Pages/Worker 배포 및 불필요 브랜치 정리를 한다.
+
+### 실패 재수정 Loop 및 검증
+
+실패한 Gate의 오류 코드·재현 조건만 기록하고 Firebase/OAuth/Worker Secret/D1/코드 중 원인을 좁혀 최소 변경으로 수정한 뒤 해당 Gate부터 재검증한다. 코드·문서·로그에는 API key, OAuth secret, Firebase UID, 관리자 이메일을 쓰지 않는다.
+
+
+## 33. 2026-08-13 기존 Firebase 관리자 Google Provider 연결 구현 계획
+
+### 문제와 원인
+
+기존 Firebase 이메일/비밀번호 관리자와 Google 로그인은 같은 이메일이라도 별도 Provider 신원이다. Google Provider를 기존 Firebase UID에 연결하지 않은 상태에서 일반 Google 로그인부터 시도하면 Firebase가 계정 연결을 요구하거나 별도 UID를 만들 수 있다. 후자는 private D1 UID allowlist와 일치하지 않아 관리자 접근이 거절된다.
+
+### 계층별 구현 범위
+
+- 화면: 관리자 설정에 **Google 계정 연결** 버튼과 성공·만료·이미 사용 중 오류 상태를 추가한다.
+- 처리: 현재 관리자 HttpOnly 세션을 확인한 뒤 Google OAuth state를 생성하고, 기존 로그인 callback에서 link state를 식별해 Firebase provider-link API로 전환한다.
+- 핵심 규칙: state는 현재 관리자 UID와 세션 hash에 묶고 10분 뒤 만료한다. 연결 결과 UID가 달라지거나 관리자가 아니면 거절한다.
+- 저장·외부 서비스: private D1에 일회성 link state만 저장한다. Firebase Auth가 Google credential을 기존 UID에 연결하며 Worker가 OAuth code·refresh token을 서버에서만 처리한다.
+- 의존성·시작: 새 browser SDK·공개 Secret은 추가하지 않는다. Worker 배포 때 additive schema/008을 먼저 적용한다.
+
+### Process Phase와 Gate
+
+1. State schema와 Worker link route를 추가한다. Gate: state가 세션 hash·UID·만료시각을 포함하고 재사용 뒤 삭제된다.
+2. Firebase accounts:update provider-link를 기존 callback에 연결한다. Gate: 성공 payload UID가 기존 UID와 같고 refresh token이 암호화되어 session에 갱신된다.
+3. 관리자 설정 화면과 hash 결과 메시지를 연결한다. Gate: link 요청은 관리자 세션에서만 시작되고 실패해도 Secret·UID가 화면에 드러나지 않는다.
+4. 정적 검사와 Actions를 통과한 뒤 main에 병합하고 Worker/Pages 배포를 확인한다. Gate: Worker schema apply 및 deploy 성공, Pages deploy 성공, 운영자가 이메일 로그인 -> 설정 -> Google 연결 -> Google 재로그인을 직접 확인한다.
+
+### 실패 재수정 Loop 및 검증 절차
+
+OAuth 교환 오류면 redirect URI와 OAuth client의 운영 설정을 확인한다. Firebase가 이미 연결됨을 반환하면 해당 Google identity가 다른 Firebase UID에 연결된 상태이므로 그 계정을 삭제·재생성하지 않고 Firebase Console에서 provider 소유 관계를 먼저 정리한다. state 만료면 기존 이메일/비밀번호로 다시 로그인해 새 연결을 시작한다. code, UID, 이메일, API key, client secret, refresh token은 로그·문서·소스에 남기지 않는다.

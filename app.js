@@ -17,6 +17,8 @@ const state = {
   galleryIndex: 0,
   chatTimer: null,
   isAdmin: false,
+  user: null,
+  pendingMemberAction: '',
 };
 
 const shell = document.querySelector('#site-shell');
@@ -45,6 +47,9 @@ const adminSessionTools = document.querySelector('#admin-session-tools');
 const adminLoginModal = document.querySelector('#admin-login-modal');
 const adminLoginForm = document.querySelector('#admin-login-form');
 const adminLoginStatus = document.querySelector('#admin-login-status');
+const memberLoginModal = document.querySelector('#member-login-modal');
+const memberLoginStatus = document.querySelector('#member-login-status');
+const guestbookLoginHint = document.querySelector('#guestbook-login-hint');
 const adminPasswordInput = document.querySelector('#admin-password');
 const adminPasswordToggle = document.querySelector('[data-password-action="toggle"]');
 const settingsModal = document.querySelector('#settings-modal');
@@ -52,6 +57,7 @@ const notificationCenter = document.querySelector('#notification-center');
 const notificationList = document.querySelector('#notification-list');
 const notificationCount = document.querySelector('#notification-count');
 const driveConnectionStatus = document.querySelector('#drive-connection-status');
+const googleLinkStatus = document.querySelector('#google-link-status');
 const backupList = document.querySelector('#backup-list');
 const backupListStatus = document.querySelector('#backup-list-status');
 const backupStatus = document.querySelector('#backup-status');
@@ -232,15 +238,6 @@ function authErrorMessage(error) {
   return authErrorMessages[error?.code] || error?.message || '로그인 요청에 실패했습니다.';
 }
 
-async function setupVisitorSession() {
-  if (!apiBase) return;
-  try {
-    await apiRequest('/api/auth/guest', { method: 'POST' });
-  } catch {
-    // Public browsing remains available when Firebase guest auth is unavailable.
-  }
-}
-
 async function recordActivity(action, entityId = null) {
   if (!apiBase) return;
   try {
@@ -322,15 +319,18 @@ function renderGuestbook(items = []) {
   items.forEach((item) => {
     const entry = document.createElement('li');
     entry.className = 'guestbook-item';
-    const actions = document.createElement('div');
-    actions.className = 'guestbook-actions';
-    ['edit', 'delete'].forEach((action) => {
-      const button = createText('button', action === 'edit' ? '수정' : '삭제', 'btn btn-sm btn-outline-secondary');
-      button.type = 'button';
-      button.dataset.guestbookAction = action;
-      button.dataset.guestbookId = item.id;
-      actions.append(button);
-    });
+    const canManage = state.isAdmin || (item.author_uid && item.author_uid === state.user?.uid);
+    const actions = canManage ? document.createElement('div') : null;
+    if (actions) {
+      actions.className = 'guestbook-actions';
+      ['edit', 'delete'].forEach((action) => {
+        const button = createText('button', action === 'edit' ? '수정' : '삭제', 'btn btn-sm btn-outline-secondary');
+        button.type = 'button';
+        button.dataset.guestbookAction = action;
+        button.dataset.guestbookId = item.id;
+        actions.append(button);
+      });
+    }
     entry.append(
       createText('time', item.date || item.createdAt || ''),
       createText('strong', item.name || 'Anonymous'),
@@ -350,31 +350,21 @@ function renderGuestbook(items = []) {
       });
       entry.append(replies);
     }
-    entry.append(actions);
+    if (actions) entry.append(actions);
     guestbookList.append(entry);
   });
 }
 
 async function editGuestbookComment(id) {
-  const password = window.prompt('댓글 작성 시 입력한 비밀번호를 입력해주세요.');
-  if (password === null) return;
   const content = window.prompt('수정할 내용을 입력해주세요.');
   if (content === null || !content.trim()) return;
-  await apiRequest('/api/guestbook/' + encodeURIComponent(id), {
-    method: 'PATCH',
-    body: JSON.stringify({ password, content }),
-  });
+  await apiRequest('/api/guestbook/' + encodeURIComponent(id), { method: 'PATCH', body: JSON.stringify({ content }) });
   await loadCommunity();
 }
 
 async function deleteGuestbookComment(id) {
-  const password = window.prompt('댓글 삭제를 위해 비밀번호를 입력해주세요.');
-  if (password === null) return;
   if (!window.confirm('이 댓글을 삭제할까요?')) return;
-  await apiRequest('/api/guestbook/' + encodeURIComponent(id), {
-    method: 'DELETE',
-    body: JSON.stringify({ password }),
-  });
+  await apiRequest('/api/guestbook/' + encodeURIComponent(id), { method: 'DELETE' });
   await loadCommunity();
 }
 
@@ -444,6 +434,33 @@ function setAdminUi(isAdmin) {
   state.isAdmin = isAdmin;
   adminLoginButton.hidden = isAdmin;
   adminSessionTools.hidden = !isAdmin;
+}
+
+function setUserUi(user) {
+  state.user = user || null;
+  setAdminUi(user?.role === 'admin');
+  const loggedIn = Boolean(user);
+  guestbookLoginHint.hidden = loggedIn;
+  guestbookForm?.querySelectorAll('input, textarea, button').forEach((control) => { control.disabled = !loggedIn; });
+}
+
+function requireMemberAction(action) {
+  if (state.user) return true;
+  state.pendingMemberAction = action;
+  memberLoginStatus.textContent = '이 기능은 Google 로그인 후 사용할 수 있습니다.';
+  openModal(memberLoginModal);
+  return false;
+}
+
+function resumeMemberAction() {
+  const action = state.pendingMemberAction;
+  state.pendingMemberAction = '';
+  if (action === 'chat') {
+    chatPanel.hidden = false;
+    loadChat();
+    startChatPolling();
+  }
+  if (action === 'guestbook') guestbookForm?.querySelector('input, textarea')?.focus();
 }
 
 function formatDate(value) {
@@ -568,33 +585,35 @@ function startAdminScheduler() {
   state.notificationTimer = setInterval(() => loadNotifications().catch(() => {}), 30000);
 }
 
-async function verifyAdminSession() {
+async function verifyAuthSession() {
   try {
     const payload = await apiRequest('/api/auth/session');
-    if (!payload.user) {
-      setAdminUi(false);
+    const user = payload.user || null;
+    setUserUi(user);
+    if (user?.role === 'admin') {
+      closeModal(adminLoginModal);
+      startAdminScheduler();
+      await loadAdminPanel();
+    } else {
       clearInterval(state.adminTimer);
       clearInterval(state.notificationTimer);
-      return;
     }
-    setAdminUi(true);
-    closeModal(adminLoginModal);
-    startAdminScheduler();
-    await loadAdminPanel();
+    if (user) {
+      closeModal(memberLoginModal);
+      resumeMemberAction();
+    }
+    return user;
   } catch {
-    setAdminUi(false);
+    setUserUi(null);
     clearInterval(state.adminTimer);
     clearInterval(state.notificationTimer);
+    return null;
   }
 }
 
 async function setupAuthSession() {
   if (!apiBase) return;
-  try {
-    await verifyAdminSession();
-  } catch {
-    setAdminUi(false);
-  }
+  await verifyAuthSession();
 }
 
 async function downloadBackup(id) {
@@ -640,24 +659,35 @@ function handleGoogleLoginCallback() {
   const result = window.location.hash.slice(1);
   const messages = {
     'admin-google-login-success': 'Google 로그인에 성공했습니다.',
-    'visitor-google-login-success': '방문자 로그인에 성공했습니다.',
+    'visitor-google-login-success': 'Google 로그인에 성공했습니다.',
     'admin-google-login-forbidden': 'Google 계정이 관리자 권한으로 등록되지 않았습니다.',
     'admin-google-login-expired': 'Google 로그인 요청이 만료되었습니다. 다시 시도해주세요.',
-    'admin-google-login-link-required': '기존 Firebase 이메일 계정과 Google 계정 연결이 필요합니다. 먼저 이메일 로그인 계정에 Google 제공자를 연결해주세요.',
+    'admin-google-login-link-required': '기존 Firebase 이메일 계정과 Google 계정 연결이 필요합니다.',
+    'admin-google-link-success': 'Google 계정 연결이 완료되었습니다. 다음부터 Google 로그인으로 관리자 모드에 접속할 수 있습니다.',
+    'admin-google-link-expired': 'Google 계정 연결 요청이 만료되었습니다. 이메일/비밀번호로 다시 로그인한 뒤 재시도해주세요.',
+    'admin-google-link-forbidden': '현재 관리자 세션으로 Google 계정을 연결할 권한이 없습니다.',
+    'admin-google-link-in-use': '이 Google 계정은 다른 Firebase 사용자에 이미 연결되어 있습니다.',
+    'admin-google-link-oauth-error': 'Google 인증 교환에 실패했습니다. Redirect URI와 OAuth Client 설정을 확인해주세요.',
+    'admin-google-link-provider-disabled': 'Firebase Google Provider가 비활성화되어 있습니다.',
+    'admin-google-link-timeout': 'Google 인증 서버 응답 시간이 초과되었습니다. 잠시 후 다시 시도해주세요.',
+    'admin-google-link-error': 'Google 계정 연결에 실패했습니다. 다시 시도해주세요.',
     'admin-google-login-oauth-error': 'Google OAuth 교환에 실패했습니다. Redirect URI와 OAuth Client 설정을 확인해주세요.',
-    'admin-google-login-provider-error': 'Firebase Google Provider 인증에 실패했습니다. Provider 활성화와 계정 연결을 확인해주세요.',
-    'admin-google-login-provider-disabled': 'Firebase Google Provider가 비활성화되어 있습니다. Firebase Authentication 설정을 확인해주세요.',
+    'admin-google-login-provider-error': 'Firebase Google 인증에 실패했습니다. Google Provider 설정을 확인해주세요.',
+    'admin-google-login-provider-disabled': 'Firebase Google Provider가 비활성화되어 있습니다.',
     'admin-google-login-not-configured': 'Google 로그인 서버 설정이 완료되지 않았습니다.',
     'admin-google-login-certificates-error': 'Firebase 인증서를 확인할 수 없습니다. 잠시 후 다시 시도해주세요.',
     'admin-google-login-token-error': 'Google 인증 토큰을 확인할 수 없습니다. 다시 시도해주세요.',
-    'admin-google-login-timeout': 'Google 인증 서버 응답 시간이 초과되었습니다. 잠시 후 다시 시도해주세요.',
+    'admin-google-login-timeout': 'Google 인증 서버 응답 시간이 초과되었습니다. 다시 시도해주세요.',
     'admin-google-login-secret-error': '서버 보안 설정이 올바르지 않습니다. 운영 설정을 확인해주세요.',
     'admin-google-login-session-error': '로그인 세션을 저장하지 못했습니다. 잠시 후 다시 시도해주세요.',
     'admin-google-login-error': 'Google 로그인에 실패했습니다. 설정을 확인해주세요.',
   };
   if (!messages[result]) return;
-  adminLoginStatus.textContent = messages[result];
-  if (result !== 'admin-google-login-success') openModal(adminLoginModal);
+  const isLinkResult = result.startsWith('admin-google-link-');
+  const status = isLinkResult ? googleLinkStatus : result.startsWith('admin-') ? adminLoginStatus : memberLoginStatus;
+  status.textContent = messages[result];
+  if (isLinkResult) openModal(settingsModal);
+  else if (!result.endsWith('-success')) openModal(result.startsWith('admin-') ? adminLoginModal : memberLoginModal);
   window.history.replaceState(null, '', window.location.pathname + window.location.search);
 }
 
@@ -697,7 +727,7 @@ function bindAdminActions() {
         }),
       });
       adminLoginForm.reset();
-      await verifyAdminSession();
+      await verifyAuthSession();
     } catch (error) {
       adminLoginStatus.textContent = authErrorMessage(error);
     } finally {
@@ -711,7 +741,7 @@ function bindAdminActions() {
 function bindCommunityActions() {
   guestbookForm?.addEventListener('submit', async (event) => {
     event.preventDefault();
-    if (!apiBase) return;
+    if (!apiBase || !requireMemberAction('guestbook')) return;
     const data = new FormData(guestbookForm);
     try {
       await apiRequest('/api/guestbook', {
@@ -728,7 +758,7 @@ function bindCommunityActions() {
 
   chatForm?.addEventListener('submit', async (event) => {
     event.preventDefault();
-    if (!apiBase) return;
+    if (!apiBase || !requireMemberAction('chat')) return;
     const data = new FormData(chatForm);
     const message = String(data.get('message') || '').trim();
     if (!message) return;
@@ -767,7 +797,7 @@ document.addEventListener('click', (event) => {
   const action = event.target.closest('[data-action]')?.dataset.action;
   if (action === 'top') resetScroll();
   if (action === 'theme') applyTheme(document.body.dataset.theme === 'dark' ? 'light' : 'dark');
-  if (action === 'open-chat') {
+  if (action === 'open-chat' && requireMemberAction('chat')) {
     chatPanel.hidden = false;
     loadChat();
     startChatPolling();
@@ -777,15 +807,16 @@ document.addEventListener('click', (event) => {
     window.clearInterval(state.chatTimer);
   }
   if (action === 'admin-login') openModal(adminLoginModal);
-  if (action === 'admin-google-login') {
-    if (!apiBase) {
-      adminLoginStatus.textContent = '로그인 서버가 설정되지 않았습니다.';
-    } else {
-      adminLoginStatus.textContent = 'Google 로그인으로 이동 중…';
+  if (action === 'admin-google-login' || action === 'member-google-login') {
+    const status = action === 'admin-google-login' ? adminLoginStatus : memberLoginStatus;
+    if (!apiBase) status.textContent = '로그인 서버가 설정되지 않았습니다.';
+    else {
+      status.textContent = 'Google 로그인으로 이동 중…';
       window.location.assign(apiBase + '/api/auth/google/start');
     }
   }
   if (action === 'close-login') closeModal(adminLoginModal);
+  if (action === 'close-member-login') closeModal(memberLoginModal);
   if (action === 'settings') {
     openModal(settingsModal);
     loadAdminPanel().catch((error) => { backupStatus.textContent = error.message; });
@@ -804,7 +835,7 @@ document.addEventListener('click', (event) => {
   if (action === 'admin-logout') {
     apiRequest('/api/auth/logout', { method: 'POST' })
       .finally(() => {
-        setAdminUi(false);
+        setUserUi(null);
         clearInterval(state.adminTimer);
         clearInterval(state.notificationTimer);
       });
@@ -814,6 +845,15 @@ document.addEventListener('click', (event) => {
     apiRequest('/api/admin/drive/start', { headers: { Accept: 'application/json' } })
       .then((payload) => { window.location.href = payload.authorizationUrl; })
       .catch((error) => { driveConnectionStatus.textContent = error.message; });
+  }
+  if (action === 'google-link') {
+    if (!apiBase) googleLinkStatus.textContent = '로그인 서버가 설정되지 않았습니다.';
+    else {
+      googleLinkStatus.textContent = 'Google 계정 선택 화면으로 이동 중…';
+      apiRequest('/api/auth/google/link/start', { headers: { Accept: 'application/json' } })
+        .then((payload) => { window.location.assign(payload.authorizationUrl); })
+        .catch((error) => { googleLinkStatus.textContent = error.message; });
+    }
   }
   if (action === 'drive-disconnect') {
     if (window.confirm('Google Drive 연결을 끊을까요? 백업 파일은 삭제되지 않습니다.')) {
@@ -856,9 +896,8 @@ bindNameShuffle();
 bindCommunityActions();
 bindAdminPasswordActions();
 bindAdminActions();
-setupVisitorSession().finally(loadCommunity);
+setupAuthSession().finally(loadCommunity);
 startGalleryLoop();
-setupAuthSession();
 
 const loadingInterval = window.setInterval(shuffleLoadingFont, 300);
 window.setTimeout(() => {

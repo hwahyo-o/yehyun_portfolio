@@ -47,8 +47,7 @@ CREATE TABLE IF NOT EXISTS updates (
 CREATE TABLE IF NOT EXISTS guestbook_comments (
   id TEXT PRIMARY KEY,
   name TEXT NOT NULL,
-  password_salt TEXT NOT NULL,
-  password_hash TEXT NOT NULL,
+  author_uid TEXT,
   content TEXT NOT NULL,
   created_at TEXT NOT NULL,
   deleted_at TEXT
@@ -67,6 +66,7 @@ CREATE TABLE IF NOT EXISTS guestbook_replies (
 
 CREATE TABLE IF NOT EXISTS conversations (
   id TEXT PRIMARY KEY,
+  owner_uid TEXT,
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL
 );

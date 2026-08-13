@@ -25,28 +25,22 @@ async function route(request, env, ctx, visitorId) {
       requireCsrfHeader(request);
       return await loginAdmin(request, env, ctx);
     }
-    if (url.pathname === '/api/auth/guest' && request.method === 'POST') {
-      requireCsrfHeader(request);
-      return await createAnonymousSession(request, env, ctx);
-    }
-    if (url.pathname === '/api/auth/member/login' && request.method === 'POST') {
-      requireCsrfHeader(request);
-      return await loginVisitor(request, env, ctx);
-    }
     if (url.pathname === '/api/auth/google/start' && request.method === 'GET') {
       return await startFirebaseGoogleLogin(env);
+    }
+    if (url.pathname === '/api/auth/google/link/start' && request.method === 'GET') {
+      return await startFirebaseGoogleLink(request, env);
     }
     if (url.pathname === '/oauth/google/login-callback' && request.method === 'GET') {
       return await finishFirebaseGoogleLogin(request, env, ctx);
     }
     if (url.pathname === '/api/auth/session' && request.method === 'GET') {
-      if (!readCookie(request, 'portfolio_admin_session')) return json({ user: null });
-      const claims = await requireAdmin(request, env);
-      return json({ user: { uid: claims.sub, email: claims.email || null } });
+      const user = await optionalUser(request, env);
+      return json({ user: user && { uid: user.claims.sub, role: user.role } });
     }
     if (url.pathname === '/api/auth/logout' && request.method === 'POST') {
       requireCsrfHeader(request);
-      return await logoutAdmin(request, env);
+      return await logout(request, env);
     }
     if (url.pathname === '/api/admin/drive/start' && request.method === 'GET') return startGoogleDriveOAuth(request, env);
     if (url.pathname === '/oauth/google/callback' && request.method === 'GET') return finishGoogleDriveOAuth(request, env);
@@ -56,27 +50,27 @@ async function route(request, env, ctx, visitorId) {
     }
     if (url.pathname === '/api/updates' && request.method === 'GET') return listUpdates(env);
     if (url.pathname === '/api/guestbook' && request.method === 'GET') return listGuestbook(env);
-    if (url.pathname === '/api/guestbook' && request.method === 'POST') return createGuestbook(request, env);
+    if (url.pathname === '/api/guestbook' && request.method === 'POST') {
+      requireCsrfHeader(request);
+      return createGuestbook(request, env, ctx);
+    }
     if (url.pathname.startsWith('/api/media/') && request.method === 'GET') {
       const [, , , postId, mediaId] = url.pathname.split('/');
       return streamDriveMedia(request, env, postId, mediaId);
     }
     if (url.pathname.startsWith('/api/conversations/') && url.pathname.endsWith('/messages')) {
       const conversationId = url.pathname.split('/')[3];
-      return request.method === 'GET'
-        ? listMessages(env, conversationId)
-        : createMessage(request, env, conversationId);
+      if (request.method !== 'GET') requireCsrfHeader(request);
+      return request.method === 'GET' ? listMessages(request, env, conversationId) : createMessage(request, env, conversationId, ctx);
     }
-    if (url.pathname === '/api/events' && request.method === 'POST') return recordPublicEvent(request, env, visitorId, ctx);
-    if (url.pathname === '/api/guestbook/' && request.method === 'PATCH') return json({ error: { code: 'NOT_FOUND', message: '방명록을 찾을 수 없습니다.' } }, 404);
-    if (url.pathname.startsWith('/api/guestbook/') && url.pathname.endsWith('/replies') && request.method === 'POST') {
-      return createGuestbookReply(request, env, url.pathname.split('/')[3]);
+    if (url.pathname === '/api/events' && request.method === 'POST') {
+      requireCsrfHeader(request);
+      return recordPublicEvent(request, env, visitorId, ctx);
     }
     if (url.pathname.startsWith('/api/guestbook/') && ['PATCH', 'DELETE'].includes(request.method)) {
+      requireCsrfHeader(request);
       const commentId = url.pathname.split('/').pop();
-      return request.method === 'PATCH'
-        ? updateGuestbook(request, env, commentId)
-        : deleteGuestbook(request, env, commentId);
+      return request.method === 'PATCH' ? updateGuestbook(request, env, commentId) : deleteGuestbook(request, env, commentId);
     }
     if (url.pathname === '/api/admin/drive/status' && request.method === 'GET') {
       await requireAdmin(request, env);
@@ -447,7 +441,7 @@ async function listUpdates(env) {
 }
 
 async function listGuestbook(env) {
-  const result = await env.DB.prepare('SELECT id, name, content, created_at AS date FROM guestbook_comments WHERE deleted_at IS NULL ORDER BY created_at DESC LIMIT 10').all();
+  const result = await env.DB.prepare('SELECT id, name, author_uid, content, created_at AS date FROM guestbook_comments WHERE deleted_at IS NULL ORDER BY created_at DESC LIMIT 10').all();
   const items = result.results || [];
   if (!items.length) return json({ items: [] });
   const placeholders = items.map(() => '?').join(', ');
@@ -465,83 +459,70 @@ async function listGuestbook(env) {
   });
 }
 
-async function createGuestbook(request, env) {
+async function createGuestbook(request, env, ctx) {
+  const user = await requireUser(request, env);
   const body = await request.json();
   const name = cleanText(body.name, 30);
-  const password = String(body.password || '');
   const content = cleanText(body.content, 1000);
-  if (!name || password.length < 4 || password.length > 64 || !content) {
-    return json({ error: { code: 'INVALID_INPUT', message: '닉네임, 비밀번호, 메시지를 확인해주세요.' } }, 400);
-  }
+  if (!name || !content) return json({ error: { code: 'INVALID_INPUT', message: '닉네임과 메시지를 확인해주세요.' } }, 400);
   const id = crypto.randomUUID();
-  const salt = crypto.getRandomValues(new Uint8Array(16));
-  const hash = await hashPassword(password, salt);
   const now = new Date().toISOString();
-  await env.DB.prepare('INSERT INTO guestbook_comments (id, name, password_salt, password_hash, content, created_at) VALUES (?, ?, ?, ?, ?, ?)')
-    .bind(id, name, encode(salt), hash, content, now).run();
+  await env.DB.prepare('INSERT INTO guestbook_comments (id, name, author_uid, content, created_at) VALUES (?, ?, ?, ?, ?)')
+    .bind(id, name, user.claims.sub, content, now).run();
+  await recordActivity(env, { eventId: crypto.randomUUID(), actorId: user.claims.sub, actorType: user.role, action: 'guestbook.create', entityId: id, metadata: {} }, ctx);
   await recordNotification(env, 'guestbook', 'Guestbook 새 댓글', name + '님이 Guestbook에 댓글을 남겼습니다.', id);
-  return json({ item: { id, name, content, date: now } }, 201);
+  return json({ item: { id, name, author_uid: user.claims.sub, content, date: now } }, 201);
 }
 
-async function readGuestbookPassword(row, password) {
-  if (!row || typeof password !== 'string' || password.length < 4 || password.length > 64) return false;
-  const hash = await hashPassword(password, decodeBytes(row.password_salt));
-  return safeEqual(hash, row.password_hash);
-}
-
-async function createGuestbookReply(request, env, commentId) {
-  if (!isSafeId(commentId)) return json({ error: { code: 'INVALID_ID', message: '방명록 ID가 올바르지 않습니다.' } }, 400);
-  const body = await request.json();
-  const name = cleanText(body.name, 30);
-  const content = cleanText(body.content, 1000);
-  const parent = await env.DB.prepare('SELECT id FROM guestbook_comments WHERE id = ? AND deleted_at IS NULL').bind(commentId).first();
-  if (!parent || !name || !content) return json({ error: { code: 'INVALID_INPUT', message: '대댓글 내용을 확인해주세요.' } }, 400);
-  const id = crypto.randomUUID();
-  const now = new Date().toISOString();
-  await env.DB.prepare("INSERT INTO guestbook_replies (id, comment_id, content, author_type, author_name, created_at) VALUES (?, ?, ?, 'visitor', ?, ?)")
-    .bind(id, commentId, content, name, now).run();
-  await recordNotification(env, 'guestbook_reply', 'Guestbook 대댓글', name + '님이 관리자 댓글에 대댓글을 남겼습니다.', id);
-  return json({ item: { id, commentId, name, content, date: now } }, 201);
+async function requireGuestbookOwner(request, env, commentId) {
+  if (!isSafeId(commentId)) throw httpError('INVALID_ID', '방명록 ID가 올바르지 않습니다.', 400);
+  const user = await requireUser(request, env);
+  const row = await env.DB.prepare('SELECT author_uid FROM guestbook_comments WHERE id = ? AND deleted_at IS NULL').bind(commentId).first();
+  if (!row) throw httpError('NOT_FOUND', '방명록을 찾을 수 없습니다.', 404);
+  if (user.role !== 'admin' && (!row.author_uid || row.author_uid !== user.claims.sub)) throw httpError('FORBIDDEN', '본인이 작성한 방명록만 수정하거나 삭제할 수 있습니다.', 403);
+  return user;
 }
 
 async function updateGuestbook(request, env, commentId) {
-  if (!isSafeId(commentId)) return json({ error: { code: 'INVALID_ID', message: '방명록 ID가 올바르지 않습니다.' } }, 400);
-  const body = await request.json();
-  const row = await env.DB.prepare('SELECT password_salt, password_hash FROM guestbook_comments WHERE id = ? AND deleted_at IS NULL').bind(commentId).first();
-  if (!await readGuestbookPassword(row, String(body.password || ''))) return json({ error: { code: 'PASSWORD_MISMATCH', message: '비밀번호가 일치하지 않습니다.' } }, 403);
-  const content = cleanText(body.content, 1000);
+  await requireGuestbookOwner(request, env, commentId);
+  const content = cleanText((await request.json()).content, 1000);
   if (!content) return json({ error: { code: 'INVALID_INPUT', message: '내용을 입력해주세요.' } }, 400);
   await env.DB.prepare('UPDATE guestbook_comments SET content = ? WHERE id = ?').bind(content, commentId).run();
   return json({ ok: true });
 }
 
 async function deleteGuestbook(request, env, commentId) {
-  if (!isSafeId(commentId)) return json({ error: { code: 'INVALID_ID', message: '방명록 ID가 올바르지 않습니다.' } }, 400);
-  const body = await request.json();
-  const row = await env.DB.prepare('SELECT password_salt, password_hash FROM guestbook_comments WHERE id = ? AND deleted_at IS NULL').bind(commentId).first();
-  if (!await readGuestbookPassword(row, String(body.password || ''))) return json({ error: { code: 'PASSWORD_MISMATCH', message: '비밀번호가 일치하지 않습니다.' } }, 403);
+  await requireGuestbookOwner(request, env, commentId);
   await env.DB.prepare('UPDATE guestbook_comments SET deleted_at = ? WHERE id = ?').bind(new Date().toISOString(), commentId).run();
   return json({ ok: true });
 }
 
-async function listMessages(env, conversationId) {
-  if (!isSafeId(conversationId)) return json({ error: { code: 'INVALID_ID', message: '대화 ID가 올바르지 않습니다.' } }, 400);
+async function requireConversationOwner(request, env, conversationId) {
+  if (!isSafeId(conversationId)) throw httpError('INVALID_ID', '대화 ID가 올바르지 않습니다.', 400);
+  const user = await requireUser(request, env);
+  const conversation = await env.DB.prepare('SELECT owner_uid FROM conversations WHERE id = ?').bind(conversationId).first();
+  if (conversation && user.role !== 'admin' && conversation.owner_uid !== user.claims.sub) throw httpError('FORBIDDEN', '본인 대화만 확인할 수 있습니다.', 403);
+  return { user, conversation };
+}
+
+async function listMessages(request, env, conversationId) {
+  await requireConversationOwner(request, env, conversationId);
   const result = await env.DB.prepare('SELECT id, sender, content, created_at AS date FROM messages WHERE conversation_id = ? ORDER BY created_at ASC LIMIT 100').bind(conversationId).all();
   return json({ items: result.results || [] });
 }
 
-async function createMessage(request, env, conversationId) {
-  if (!isSafeId(conversationId)) return json({ error: { code: 'INVALID_ID', message: '대화 ID가 올바르지 않습니다.' } }, 400);
-  const body = await request.json();
-  const content = cleanText(body.message, 1000);
+async function createMessage(request, env, conversationId, ctx) {
+  const { user, conversation } = await requireConversationOwner(request, env, conversationId);
+  const content = cleanText((await request.json()).message, 1000);
   if (!content) return json({ error: { code: 'INVALID_INPUT', message: '메시지를 입력해주세요.' } }, 400);
   const now = new Date().toISOString();
+  if (!conversation) await env.DB.prepare('INSERT INTO conversations (id, owner_uid, created_at, updated_at) VALUES (?, ?, ?, ?)').bind(conversationId, user.claims.sub, now, now).run();
   await env.DB.batch([
-    env.DB.prepare('INSERT OR IGNORE INTO conversations (id, created_at, updated_at) VALUES (?, ?, ?)').bind(conversationId, now, now),
-    env.DB.prepare('INSERT INTO messages (id, conversation_id, sender, content, created_at) VALUES (?, ?, \'visitor\', ?, ?)').bind(crypto.randomUUID(), conversationId, content, now),
+    env.DB.prepare('INSERT INTO messages (id, conversation_id, sender, content, created_at) VALUES (?, ?, ?, ?, ?)').bind(crypto.randomUUID(), conversationId, user.role === 'admin' ? 'admin' : 'visitor', content, now),
     env.DB.prepare('UPDATE conversations SET updated_at = ? WHERE id = ?').bind(now, conversationId),
   ]);
-  await recordNotification(env, 'dm', 'Direct Message 새 문의', '방문자가 새 메시지를 보냈습니다.', conversationId);
+  await recordActivity(env, { eventId: crypto.randomUUID(), actorId: user.claims.sub, actorType: user.role, action: 'dm.create', entityId: conversationId, metadata: {} }, ctx);
+  await recordNotification(env, 'dm', 'Direct Message 새 문의', 'Member가 새 메시지를 보냈습니다.', conversationId);
   return json({ ok: true }, 201);
 }
 
@@ -691,29 +672,11 @@ async function recordNotification(env, type, title, body, entityId = null) {
 
 async function recordPublicEvent(request, env, visitorId, ctx) {
   const body = await request.json().catch(() => ({}));
-  const legacyType = ['share', 'reaction'].includes(body.type) ? body.type : '';
-  const action = ['post.view', 'content.share', 'content.reaction', 'guestbook.create', 'dm.create'].includes(body.action)
-    ? body.action
-    : legacyType ? (legacyType === 'share' ? 'content.share' : 'content.reaction') : '';
+  const action = ['post.view', 'content.share', 'content.reaction', 'guestbook.create', 'dm.create'].includes(body.action) ? body.action : '';
   if (!action) return json({ error: { code: 'INVALID_INPUT', message: '이벤트 종류가 올바르지 않습니다.' } }, 400);
-  const actor = await resolveActivityActor(request, env, visitorId);
-  await recordActivity(env, {
-    eventId: String(body.eventId || crypto.randomUUID()),
-    actorId: actor.id,
-    actorType: actor.type,
-    action,
-    entityId: cleanText(body.entityId || body.postId, 100),
-    metadata: {},
-  }, ctx);
-  if (['content.share', 'content.reaction'].includes(action)) {
-    await recordNotification(
-      env,
-      action === 'content.share' ? 'share' : 'reaction',
-      action === 'content.share' ? '게시물 공유 알림' : '게시물 반응 알림',
-      action === 'content.share' ? '방문자가 게시물을 공유했습니다.' : '방문자가 게시물에 반응을 남겼습니다.',
-      cleanText(body.entityId || body.postId, 100),
-    );
-  }
+  const user = action === 'post.view' ? await optionalUser(request, env) : await requireUser(request, env);
+  await recordActivity(env, { eventId: String(body.eventId || crypto.randomUUID()), actorId: user?.claims.sub || visitorId, actorType: user?.role || 'guest', action, entityId: cleanText(body.entityId || body.postId, 100), metadata: {} }, ctx);
+  if (['content.share', 'content.reaction'].includes(action)) await recordNotification(env, action === 'content.share' ? 'share' : 'reaction', action === 'content.share' ? '게시물 공유 알림' : '게시물 반응 알림', action === 'content.share' ? 'Member가 게시물을 공유했습니다.' : 'Member가 게시물에 반응을 남겼습니다.', cleanText(body.entityId || body.postId, 100));
   return json({ ok: true }, 201);
 }
 
@@ -865,7 +828,7 @@ async function restoreBackup(env, backupId) {
   rows('posts').forEach((row) => statements.push(env.DB.prepare('INSERT INTO posts (id, type, title, description, body_html, is_private, status, content_path, published_at, created_at, updated_at, deleted_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)').bind(row.id, row.type, row.title, row.description || '', row.body_html || '', row.is_private || 0, row.status || 'draft', row.content_path || null, row.published_at || null, row.created_at, row.updated_at, row.deleted_at || null)));
   rows('post_media').forEach((row) => statements.push(env.DB.prepare('INSERT INTO post_media (id, post_id, file_name, mime_type, size_bytes, sha256, drive_file_id, content_url, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)').bind(row.id, row.post_id, row.file_name, row.mime_type, row.size_bytes || 0, row.sha256 || null, row.drive_file_id || null, row.content_url || null, row.created_at)));
   rows('updates').forEach((row) => statements.push(env.DB.prepare('INSERT INTO updates (id, title, description, published_at, created_at, deleted_at) VALUES (?, ?, ?, ?, ?, ?)').bind(row.id, row.title, row.description || '', row.published_at, row.created_at, row.deleted_at || null)));
-  rows('guestbook_comments').forEach((row) => statements.push(env.DB.prepare('INSERT INTO guestbook_comments (id, name, password_salt, password_hash, content, created_at, deleted_at) VALUES (?, ?, ?, ?, ?, ?, ?)').bind(row.id, row.name, row.password_salt, row.password_hash, row.content, row.created_at, row.deleted_at || null)));
+  rows('guestbook_comments').forEach((row) => statements.push(env.DB.prepare('INSERT INTO guestbook_comments (id, name, author_uid, content, created_at, deleted_at) VALUES (?, ?, ?, ?, ?, ?)').bind(row.id, row.name, row.author_uid || null, row.content, row.created_at, row.deleted_at || null)));
   rows('guestbook_replies').forEach((row) => statements.push(env.DB.prepare("INSERT INTO guestbook_replies (id, comment_id, content, created_at, deleted_at, author_type, author_name) VALUES (?, ?, ?, ?, ?, ?, ?)").bind(row.id, row.comment_id, row.content, row.created_at, row.deleted_at || null, row.author_type || 'visitor', row.author_name || '')));
   rows('conversations').forEach((row) => statements.push(env.DB.prepare('INSERT INTO conversations (id, created_at, updated_at) VALUES (?, ?, ?)').bind(row.id, row.created_at, row.updated_at)));
   rows('messages').forEach((row) => statements.push(env.DB.prepare('INSERT INTO messages (id, conversation_id, sender, content, created_at) VALUES (?, ?, ?, ?, ?)').bind(row.id, row.conversation_id, row.sender, row.content, row.created_at)));
@@ -964,20 +927,51 @@ async function requireAdmin(request, env) {
   return claims;
 }
 
-async function isAdmin(claims, env) {
-  const configuredEmail = normalizeEmail(env.ADMIN_EMAIL);
-  if (!configuredEmail) throw httpError('AUTH_NOT_CONFIGURED', '관리자 로그인 설정이 필요합니다.', 503);
-  return normalizeEmail(claims?.email) === configuredEmail;
+async function requireUser(request, env) {
+  const adminSession = readCookie(request, 'portfolio_admin_session');
+  if (adminSession) return { claims: await requireAdmin(request, env), role: 'admin' };
+  const memberSession = readCookie(request, 'portfolio_visitor_session');
+  if (!memberSession) throw httpError('AUTH_REQUIRED', 'Google 로그인이 필요합니다.', 401);
+  requireCsrfHeader(request);
+  const sessionId = await hashSessionToken(memberSession);
+  const row = await env.DB.prepare('SELECT uid, refresh_token_ciphertext, refresh_token_iv FROM visitor_sessions WHERE id = ?').bind(sessionId).first();
+  if (!row) throw httpError('AUTH_REQUIRED', '로그인이 만료되었습니다.', 401);
+  try {
+    const refreshToken = await decryptSecret(row.refresh_token_ciphertext, row.refresh_token_iv, env.SESSION_ENCRYPTION_KEY);
+    const refreshed = await refreshFirebaseToken(refreshToken, env);
+    const claims = await verifyFirebaseToken(refreshed.idToken, env);
+    if (claims.sub !== row.uid) throw httpError('AUTH_REQUIRED', '로그인이 만료되었습니다.', 401);
+    if (refreshed.refreshToken && refreshed.refreshToken !== refreshToken) {
+      const encrypted = await encryptSecret(refreshed.refreshToken, env.SESSION_ENCRYPTION_KEY);
+      await env.DB.prepare('UPDATE visitor_sessions SET refresh_token_ciphertext = ?, refresh_token_iv = ?, updated_at = ? WHERE id = ?').bind(encrypted.ciphertext, encrypted.iv, new Date().toISOString(), sessionId).run();
+    }
+    return { claims, role: 'member' };
+  } catch {
+    await env.DB.prepare('DELETE FROM visitor_sessions WHERE id = ?').bind(sessionId).run();
+    throw httpError('AUTH_REQUIRED', '로그인이 만료되었습니다.', 401);
+  }
 }
 
-async function startFirebaseGoogleLogin(env) {
+async function optionalUser(request, env) {
+  if (!readCookie(request, 'portfolio_admin_session') && !readCookie(request, 'portfolio_visitor_session')) return null;
+  try { return await requireUser(request, env); } catch (error) {
+    if (error.status === 401 || error.status === 403) return null;
+    throw error;
+  }
+}
+
+async function isAdmin(claims, env) {
+  if (!env.DB || !claims?.sub) return false;
+  return Boolean(await env.DB.prepare('SELECT uid FROM admin_roles WHERE uid = ?').bind(claims.sub).first());
+}
+
+function requireFirebaseGoogleConfig(env) {
   if (!env.GOOGLE_CLIENT_ID || !env.GOOGLE_CLIENT_SECRET || !env.GOOGLE_LOGIN_REDIRECT_URI || !env.FIREBASE_WEB_API_KEY) {
     throw httpError('GOOGLE_LOGIN_NOT_CONFIGURED', 'Google 로그인 설정이 필요합니다.', 503);
   }
-  await env.DB.prepare('DELETE FROM firebase_google_login_states WHERE created_at < ?').bind(new Date(Date.now() - 10 * 60 * 1000).toISOString()).run();
-  const state = crypto.randomUUID();
-  await env.DB.prepare('INSERT INTO firebase_google_login_states (state, created_at) VALUES (?, ?)')
-    .bind(state, new Date().toISOString()).run();
+}
+
+function googleAuthorizationUrl(env, state) {
   const params = new URLSearchParams({
     client_id: env.GOOGLE_CLIENT_ID,
     redirect_uri: env.GOOGLE_LOGIN_REDIRECT_URI,
@@ -987,10 +981,28 @@ async function startFirebaseGoogleLogin(env) {
     prompt: 'select_account',
     state,
   });
-  return new Response(null, {
-    status: 302,
-    headers: { Location: 'https://accounts.google.com/o/oauth2/v2/auth?' + params.toString() },
-  });
+  return 'https://accounts.google.com/o/oauth2/v2/auth?' + params.toString();
+}
+
+async function startFirebaseGoogleLogin(env) {
+  requireFirebaseGoogleConfig(env);
+  await env.DB.prepare('DELETE FROM firebase_google_login_states WHERE created_at < ?').bind(new Date(Date.now() - 10 * 60 * 1000).toISOString()).run();
+  const state = crypto.randomUUID();
+  await env.DB.prepare('INSERT INTO firebase_google_login_states (state, created_at) VALUES (?, ?)')
+    .bind(state, new Date().toISOString()).run();
+  return new Response(null, { status: 302, headers: { Location: googleAuthorizationUrl(env, state) } });
+}
+
+async function startFirebaseGoogleLink(request, env) {
+  requireFirebaseGoogleConfig(env);
+  const claims = await requireAdmin(request, env);
+  const sessionToken = readCookie(request, 'portfolio_admin_session');
+  const sessionId = await hashSessionToken(sessionToken);
+  await env.DB.prepare('DELETE FROM firebase_google_link_states WHERE created_at < ?').bind(new Date(Date.now() - 10 * 60 * 1000).toISOString()).run();
+  const state = crypto.randomUUID();
+  await env.DB.prepare('INSERT INTO firebase_google_link_states (state, uid, session_id, created_at) VALUES (?, ?, ?, ?)')
+    .bind(state, claims.sub, sessionId, new Date().toISOString()).run();
+  return json({ authorizationUrl: googleAuthorizationUrl(env, state) });
 }
 
 function firebaseAuthErrorCode(payload) {
@@ -1001,53 +1013,59 @@ function firebaseAuthErrorCode(payload) {
   return 'AUTH_SERVICE_ERROR';
 }
 
+async function exchangeGoogleAuthorizationCode(code, env) {
+  const response = await fetchWithTimeout('https://oauth2.googleapis.com/token', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({
+      client_id: env.GOOGLE_CLIENT_ID || '',
+      client_secret: env.GOOGLE_CLIENT_SECRET || '',
+      code,
+      grant_type: 'authorization_code',
+      redirect_uri: env.GOOGLE_LOGIN_REDIRECT_URI || '',
+    }),
+  });
+  if (!response.ok) throw httpError('GOOGLE_OAUTH_FAILED', 'Google 인증 교환에 실패했습니다.', 502);
+  const token = await response.json();
+  if (!token.id_token) throw httpError('GOOGLE_OAUTH_FAILED', 'Google 인증 토큰이 없습니다.', 502);
+  return token;
+}
+
 async function finishFirebaseGoogleLogin(request, env, ctx) {
   const url = new URL(request.url);
   const state = url.searchParams.get('state') || '';
   const code = url.searchParams.get('code') || '';
   if (!state || !code) return oauthRedirect(env, 'admin-google-login-error');
 
+  const linkState = await env.DB.prepare('SELECT state, uid, session_id, created_at FROM firebase_google_link_states WHERE state = ?').bind(state).first();
+  if (linkState) return finishFirebaseGoogleLink(request, env, linkState, code);
+
   const stateRow = await env.DB.prepare('SELECT state, created_at FROM firebase_google_login_states WHERE state = ?').bind(state).first();
-  if (!stateRow || Date.now() - Date.parse(stateRow.created_at) > 10 * 60 * 1000) {
-    return oauthRedirect(env, 'admin-google-login-expired');
-  }
+  if (!stateRow || Date.now() - Date.parse(stateRow.created_at) > 10 * 60 * 1000) return oauthRedirect(env, 'admin-google-login-expired');
   await env.DB.prepare('DELETE FROM firebase_google_login_states WHERE state = ?').bind(state).run();
 
-  let tokenResponse;
+  let googleToken;
   try {
-    tokenResponse = await fetchWithTimeout('https://oauth2.googleapis.com/token', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: new URLSearchParams({
-        client_id: env.GOOGLE_CLIENT_ID || '',
-        client_secret: env.GOOGLE_CLIENT_SECRET || '',
-        code,
-        grant_type: 'authorization_code',
-        redirect_uri: env.GOOGLE_LOGIN_REDIRECT_URI || '',
-      }),
-    });
+    googleToken = await exchangeGoogleAuthorizationCode(code, env);
   } catch (error) {
     return oauthRedirect(env, googleErrorFragment(error.code));
   }
-  if (!tokenResponse.ok) return oauthRedirect(env, 'admin-google-login-oauth-error');
-  const googleToken = await tokenResponse.json();
-  if (!googleToken.id_token) return oauthRedirect(env, 'admin-google-login-oauth-error');
 
   let firebaseResponse;
   try {
     firebaseResponse = await fetchWithTimeout(
       'https://identitytoolkit.googleapis.com/v1/accounts:signInWithIdp?key=' + encodeURIComponent(env.FIREBASE_WEB_API_KEY || ''),
-    {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        postBody: new URLSearchParams({ id_token: googleToken.id_token, providerId: 'google.com' }).toString(),
-        requestUri: firebaseRequestUri(env),
-        returnSecureToken: true,
-        returnIdpCredential: false,
-        autoCreate: true,
-      }),
-    },
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          postBody: new URLSearchParams({ id_token: googleToken.id_token, providerId: 'google.com' }).toString(),
+          requestUri: firebaseRequestUri(env),
+          returnSecureToken: true,
+          returnIdpCredential: false,
+          autoCreate: true,
+        }),
+      },
     );
   } catch (error) {
     return oauthRedirect(env, googleErrorFragment(error.code));
@@ -1055,21 +1073,13 @@ async function finishFirebaseGoogleLogin(request, env, ctx) {
   if (!firebaseResponse.ok) {
     const firebaseError = await firebaseResponse.json().catch(() => ({}));
     const reason = String(firebaseError.error?.message || '');
-    if (reason.includes('INVALID_API_KEY') || reason.includes('API_KEY_INVALID')) {
-      return oauthRedirect(env, 'admin-google-login-not-configured');
-    }
-    if (reason.includes('EMAIL_EXISTS') || reason.includes('FEDERATED_USER_ID_ALREADY_LINKED')) {
-      return oauthRedirect(env, 'admin-google-login-link-required');
-    }
-    if (reason.includes('OPERATION_NOT_ALLOWED') || reason.includes('INVALID_PROVIDER_ID')) {
-      return oauthRedirect(env, 'admin-google-login-provider-disabled');
-    }
+    if (reason.includes('INVALID_API_KEY') || reason.includes('API_KEY_INVALID')) return oauthRedirect(env, 'admin-google-login-not-configured');
+    if (reason.includes('EMAIL_EXISTS') || reason.includes('FEDERATED_USER_ID_ALREADY_LINKED')) return oauthRedirect(env, 'admin-google-login-link-required');
+    if (reason.includes('OPERATION_NOT_ALLOWED') || reason.includes('INVALID_PROVIDER_ID')) return oauthRedirect(env, 'admin-google-login-provider-disabled');
     return oauthRedirect(env, 'admin-google-login-provider-error');
   }
   const firebasePayload = await firebaseResponse.json();
-  if (!firebasePayload.idToken || !firebasePayload.refreshToken || !firebasePayload.localId) {
-    return oauthRedirect(env, 'admin-google-login-provider-error');
-  }
+  if (!firebasePayload.idToken || !firebasePayload.refreshToken || !firebasePayload.localId) return oauthRedirect(env, 'admin-google-login-provider-error');
 
   try {
     const claims = await verifyFirebaseToken(firebasePayload.idToken, env);
@@ -1077,12 +1087,60 @@ async function finishFirebaseGoogleLogin(request, env, ctx) {
     const isAdministrator = await isAdmin(claims, env);
     const sessionResponse = isAdministrator
       ? await createAdminSession(firebasePayload, claims.email || firebasePayload.email || '', env, claims, ctx)
-      : await createVisitorSession(firebasePayload, claims.email || firebasePayload.email || '', env, 'google', claims, ctx);
+      : await createMemberSession(firebasePayload, claims.email || firebasePayload.email || '', env, 'google', claims, ctx);
     const headers = new Headers(sessionResponse.headers);
     headers.set('Location', (env.FRONTEND_URL || 'https://hwahyo-o.github.io/yehyun_portfolio') + (isAdministrator ? '/#admin-google-login-success' : '/#visitor-google-login-success'));
     return new Response(null, { status: 302, headers });
   } catch (error) {
     return oauthRedirect(env, googleErrorFragment(error.code));
+  }
+}
+
+async function finishFirebaseGoogleLink(request, env, stateRow, code) {
+  const expired = Date.now() - Date.parse(stateRow.created_at) > 10 * 60 * 1000;
+  const sessionToken = readCookie(request, 'portfolio_admin_session');
+  const sessionId = sessionToken ? await hashSessionToken(sessionToken) : '';
+  await env.DB.prepare('DELETE FROM firebase_google_link_states WHERE state = ?').bind(stateRow.state).run();
+  if (expired || sessionId !== stateRow.session_id) return oauthRedirect(env, 'admin-google-link-expired');
+
+  const session = await env.DB.prepare('SELECT uid, refresh_token_ciphertext, refresh_token_iv FROM admin_sessions WHERE id = ?').bind(sessionId).first();
+  if (!session || session.uid !== stateRow.uid) return oauthRedirect(env, 'admin-google-link-expired');
+
+  try {
+    const refreshToken = await decryptSecret(session.refresh_token_ciphertext, session.refresh_token_iv, env.SESSION_ENCRYPTION_KEY);
+    const refreshed = await refreshFirebaseToken(refreshToken, env);
+    const claims = await verifyFirebaseToken(refreshed.idToken, env);
+    if (claims.sub !== stateRow.uid || !await isAdmin(claims, env)) return oauthRedirect(env, 'admin-google-link-forbidden');
+
+    const googleToken = await exchangeGoogleAuthorizationCode(code, env);
+    const response = await fetchWithTimeout(
+      'https://identitytoolkit.googleapis.com/v1/accounts:update?key=' + encodeURIComponent(env.FIREBASE_WEB_API_KEY || ''),
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          idToken: refreshed.idToken,
+          postBody: new URLSearchParams({ id_token: googleToken.id_token, providerId: 'google.com' }).toString(),
+          returnSecureToken: true,
+          returnIdpCredential: false,
+        }),
+      },
+    );
+    if (!response.ok) {
+      const payload = await response.json().catch(() => ({}));
+      const reason = String(payload.error?.message || '');
+      if (reason.includes('FEDERATED_USER_ID_ALREADY_LINKED') || reason.includes('EMAIL_EXISTS')) return oauthRedirect(env, 'admin-google-link-in-use');
+      if (reason.includes('OPERATION_NOT_ALLOWED') || reason.includes('INVALID_PROVIDER_ID')) return oauthRedirect(env, 'admin-google-login-provider-disabled');
+      return oauthRedirect(env, 'admin-google-link-error');
+    }
+    const payload = await response.json();
+    if (!payload.idToken || !payload.refreshToken || payload.localId !== stateRow.uid) return oauthRedirect(env, 'admin-google-link-error');
+    const encrypted = await encryptSecret(payload.refreshToken, env.SESSION_ENCRYPTION_KEY);
+    await env.DB.prepare('UPDATE admin_sessions SET refresh_token_ciphertext = ?, refresh_token_iv = ?, updated_at = ? WHERE id = ?')
+      .bind(encrypted.ciphertext, encrypted.iv, new Date().toISOString(), sessionId).run();
+    return oauthRedirect(env, 'admin-google-link-success');
+  } catch (error) {
+    return oauthRedirect(env, googleErrorFragment(error.code).replace('admin-google-login-', 'admin-google-link-'));
   }
 }
 
@@ -1097,6 +1155,7 @@ function googleErrorFragment(code) {
     AUTH_UPSTREAM_TIMEOUT: 'admin-google-login-timeout',
     AUTH_PROVIDER_DISABLED: 'admin-google-login-provider-disabled',
     AUTH_TOKEN_VERIFY_FAILED: 'admin-google-login-token-error',
+    GOOGLE_OAUTH_FAILED: 'admin-google-login-oauth-error',
   };
   return fragments[code] || 'admin-google-login-error';
 }
@@ -1108,7 +1167,7 @@ async function loginAdmin(request, env, ctx) {
   if (!email || password.length < 1 || password.length > 256) {
     throw httpError('AUTH_FAILED', '이메일 또는 비밀번호를 확인해주세요.', 401);
   }
-  if (!env.DB || !env.FIREBASE_WEB_API_KEY || !env.SESSION_ENCRYPTION_KEY || !env.ADMIN_EMAIL) {
+  if (!env.DB || !env.FIREBASE_WEB_API_KEY || !env.SESSION_ENCRYPTION_KEY) {
     throw httpError('AUTH_NOT_CONFIGURED', '관리자 로그인을 사용할 수 없습니다.', 503);
   }
 
@@ -1155,54 +1214,7 @@ async function loginAdmin(request, env, ctx) {
   }
 }
 
-async function createAnonymousSession(request, env, ctx) {
-  if (!env.DB || !env.FIREBASE_WEB_API_KEY || !env.SESSION_ENCRYPTION_KEY) {
-    throw httpError('AUTH_NOT_CONFIGURED', '방문자 로그인을 사용할 수 없습니다.', 503);
-  }
-  const existingToken = readCookie(request, 'portfolio_visitor_session');
-  if (existingToken) {
-    const existing = await env.DB.prepare('SELECT uid, email, provider FROM visitor_sessions WHERE id = ?').bind(await hashSessionToken(existingToken)).first();
-    if (existing) return withVisitorSessionCookie(json({ user: { uid: existing.uid, email: existing.email || null, role: existing.provider === 'anonymous' ? 'guest' : 'member' } }), existingToken);
-  }
-  const response = await fetchWithTimeout('https://identitytoolkit.googleapis.com/v1/accounts:signUp?key=' + encodeURIComponent(env.FIREBASE_WEB_API_KEY), {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ returnSecureToken: true }),
-  });
-  if (!response.ok) {
-    const failure = await response.json().catch(() => ({}));
-    const code = firebaseAuthErrorCode(failure);
-    throw httpError(code, 'Firebase 익명 로그인 설정을 확인해주세요.', 503);
-  }
-  const payload = await response.json();
-  const claims = await verifyFirebaseToken(payload.idToken, env);
-  return createVisitorSession(payload, '', env, 'anonymous', claims, ctx);
-}
-
-async function loginVisitor(request, env, ctx) {
-  const body = await request.json().catch(() => ({}));
-  const email = String(body.email || '').trim();
-  const password = String(body.password || '');
-  if (!email || password.length < 1 || password.length > 256) {
-    throw httpError('AUTH_FAILED', '이메일 또는 비밀번호를 확인해주세요.', 401);
-  }
-  if (!env.DB || !env.FIREBASE_WEB_API_KEY || !env.SESSION_ENCRYPTION_KEY) {
-    throw httpError('AUTH_NOT_CONFIGURED', '방문자 로그인을 사용할 수 없습니다.', 503);
-  }
-  const response = await fetchWithTimeout('https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=' + encodeURIComponent(env.FIREBASE_WEB_API_KEY), {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ email, password, returnSecureToken: true }),
-  });
-  if (!response.ok) throw httpError('AUTH_FAILED', '이메일 또는 비밀번호를 확인해주세요.', 401);
-  const payload = await response.json();
-  const claims = await verifyFirebaseToken(payload.idToken, env);
-  if (claims.sub !== payload.localId) throw httpError('AUTH_TOKEN_VERIFY_FAILED', '로그인 토큰을 확인할 수 없습니다.', 503);
-  if (await isAdmin(claims, env)) throw httpError('ADMIN_LOGIN_REQUIRED', '관리자 로그인 화면을 사용해주세요.', 409);
-  return createVisitorSession(payload, claims.email || email, env, 'password', claims, ctx);
-}
-
-async function createVisitorSession(payload, email, env, provider, claims = null, ctx) {
+async function createMemberSession(payload, email, env, provider, claims = null, ctx) {
   const resolvedClaims = claims || await verifyFirebaseToken(payload.idToken, env);
   if (resolvedClaims.sub !== payload.localId) throw httpError('AUTH_TOKEN_VERIFY_FAILED', '로그인 토큰을 확인할 수 없습니다.', 503);
   const rawSession = crypto.randomUUID() + crypto.randomUUID();
@@ -1210,16 +1222,8 @@ async function createVisitorSession(payload, email, env, provider, claims = null
   const now = new Date().toISOString();
   await env.DB.prepare('INSERT INTO visitor_sessions (id, uid, email, provider, refresh_token_ciphertext, refresh_token_iv, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
     .bind(await hashSessionToken(rawSession), resolvedClaims.sub, email || null, provider, encrypted.ciphertext, encrypted.iv, now, now).run();
-  await recordActivity(env, { eventId: crypto.randomUUID(), actorId: resolvedClaims.sub, actorType: provider === 'anonymous' ? 'guest' : 'member', action: 'auth.login', metadata: { provider } }, ctx);
-  return withVisitorSessionCookie(json({ user: { uid: resolvedClaims.sub, email: email || null, role: provider === 'anonymous' ? 'guest' : 'member' } }), rawSession);
-}
-
-async function resolveActivityActor(request, env, visitorId) {
-  const rawSession = readCookie(request, 'portfolio_visitor_session');
-  if (!rawSession || !env.DB) return { id: visitorId, type: 'guest' };
-  const row = await env.DB.prepare('SELECT uid, provider FROM visitor_sessions WHERE id = ?').bind(await hashSessionToken(rawSession)).first();
-  if (!row) return { id: visitorId, type: 'guest' };
-  return { id: row.uid, type: row.provider === 'anonymous' ? 'guest' : 'member' };
+  await recordActivity(env, { eventId: crypto.randomUUID(), actorId: resolvedClaims.sub, actorType: 'member', action: 'auth.login', metadata: { provider } }, ctx);
+  return withVisitorSessionCookie(json({ user: { uid: resolvedClaims.sub, role: 'member' } }), rawSession);
 }
 
 async function createAdminSession(payload, email, env, claims = null, ctx) {
@@ -1242,10 +1246,12 @@ async function createAdminSession(payload, email, env, claims = null, ctx) {
 }
 
 
-async function logoutAdmin(request, env) {
-  const rawSession = readCookie(request, 'portfolio_admin_session');
-  if (rawSession) await env.DB.prepare('DELETE FROM admin_sessions WHERE id = ?').bind(await hashSessionToken(rawSession)).run();
-  return clearCookie(json({ ok: true }));
+async function logout(request, env) {
+  const adminSession = readCookie(request, 'portfolio_admin_session');
+  const memberSession = readCookie(request, 'portfolio_visitor_session');
+  if (adminSession) await env.DB.prepare('DELETE FROM admin_sessions WHERE id = ?').bind(await hashSessionToken(adminSession)).run();
+  if (memberSession) await env.DB.prepare('DELETE FROM visitor_sessions WHERE id = ?').bind(await hashSessionToken(memberSession)).run();
+  return clearAllAuthCookies(json({ ok: true }));
 }
 
 async function refreshFirebaseToken(refreshToken, env) {
@@ -1282,9 +1288,10 @@ function withVisitorSessionCookie(response, value) {
   return new Response(response.body, { status: response.status, headers });
 }
 
-function clearCookie(response) {
+function clearAllAuthCookies(response) {
   const headers = new Headers(response.headers);
-  headers.set('Set-Cookie', 'portfolio_admin_session=; Max-Age=0; Path=/; HttpOnly; Secure; SameSite=None');
+  headers.append('Set-Cookie', 'portfolio_admin_session=; Max-Age=0; Path=/; HttpOnly; Secure; SameSite=None');
+  headers.append('Set-Cookie', 'portfolio_visitor_session=; Max-Age=0; Path=/; HttpOnly; Secure; SameSite=None');
   return new Response(response.body, { status: response.status, headers });
 }
 
@@ -1336,21 +1343,6 @@ async function verifyFirebaseToken(token, env) {
   };
 }
 
-async function hashPassword(password, salt) {
-  const material = await crypto.subtle.importKey('raw', new TextEncoder().encode(password), 'PBKDF2', false, ['deriveBits']);
-  const bits = await crypto.subtle.deriveBits({ name: 'PBKDF2', salt, iterations: 120000, hash: 'SHA-256' }, material, 256);
-  return encode(new Uint8Array(bits));
-}
-
-function safeEqual(left, right) {
-  const a = decodeBytes(left);
-  const b = decodeBytes(right);
-  if (a.length !== b.length) return false;
-  let result = 0;
-  a.forEach((value, index) => { result |= value ^ b[index]; });
-  return result === 0;
-}
-
 function encodeText(value) {
   return encode(new TextEncoder().encode(String(value)));
 }
@@ -1365,9 +1357,6 @@ function cleanText(value, maxLength) {
   return String(value || '').trim().replace(/[<>]/g, '').slice(0, maxLength);
 }
 
-function normalizeEmail(value) {
-  return String(value || '').trim().toLowerCase();
-}
 
 async function fetchWithTimeout(resource, options = {}, timeoutMs = 10000) {
   const controller = new AbortController();

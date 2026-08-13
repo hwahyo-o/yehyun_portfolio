@@ -41,10 +41,19 @@ jobs:
           test -f worker/schema/004_firebase_google_login.sql
           test -f worker/schema/005_activity_events.sql
           test -f worker/schema/006_visitor_sessions.sql
+          test -f worker/schema/007_member_guestbook.sql
+          test -f worker/schema/008_firebase_google_link.sql
           grep -q '/api/auth/google/start' worker/src/index.js
+          grep -q '/api/auth/google/link/start' worker/src/index.js
+          grep -q 'accounts:update' worker/src/index.js
           grep -q 'activity_events' worker/src/index.js
           grep -Fq 'crons = ["0 11 * * *"]' worker/wrangler.toml
           grep -q '/oauth/google/login-callback' worker/src/index.js
+          grep -q 'author_uid' worker/src/index.js
+          grep -q 'requireUser' worker/src/index.js
+          ! grep -q 'password_salt\|password_hash\|ADMIN_EMAIL' worker/src/index.js
+          grep -q 'member-login-modal' index.html
+          ! sed -n '/id="guestbook-form"/,/\/form>/p' index.html | grep -q 'name="password"'
           grep -q 'admin-google-login' index.html
           ! grep -R "AIza[0-9A-Za-z_-]\{20,\}\|firebase.*apiKey\|gstatic.com/firebasejs" --exclude-dir=.git --exclude-dir=.github --exclude='*.example' .
           ! grep -Eq "firebase|authDomain|projectId|messagingSenderId|apiKey" config.js
