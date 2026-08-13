@@ -37,8 +37,10 @@ jobs:
           ! grep -x 'async' app.js
           grep -q 'portfolio_start_failed' app.js
           grep -q "script-src 'self' https://cdn.jsdelivr.net https://www.gstatic.com https://apis.google.com" index.html
-          grep -q 'swiper@11/swiper-bundle.min.css' index.html
-          grep -q 'swiper@11/swiper-bundle.min.js' index.html
+          grep -q 'swiper@11.2.10/swiper-bundle.min.css' index.html
+          grep -q 'swiper@11.2.10/swiper-bundle.min.js' index.html
+          grep -q 'sha384-2UI1PfnXFjVMQ7/ZDEF70CR943oH3v6uZrFQGGqJYlvhh4g6z6uVktxYbOlAczav' index.html
+          grep -q 'sha384-gAPqlBuTCdtVcYt9ocMOYWrnBZ4XSL6q+4eXqwNycOr4iFczhNKtnYhF3NEXJM51' index.html
           grep -q 'class="swiper gallery-swiper"' index.html
           grep -q 'class="swiper-wrapper"' index.html
           grep -q 'new window.Swiper' app.js
