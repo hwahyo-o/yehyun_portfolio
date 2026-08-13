@@ -71,6 +71,30 @@ const publishPostStatus = document.querySelector('#publish-post-status');
 let adminLoginPending = false;
 const API_TIMEOUT_MS = 15000;
 
+const driveCallbackMessages = {
+  'admin-drive-connected': 'Google Drive 연결이 완료되었습니다. Portfolio-con 폴더를 준비했습니다.',
+  'admin-drive-access-denied': 'Google Drive 권한 승인이 취소되었습니다.',
+  'admin-drive-expired': 'Google Drive 연결 시간이 만료되었습니다. 다시 시도해주세요.',
+  'admin-drive-token-error': 'Google Drive 인증 정보를 확인하지 못했습니다. 다시 연결해주세요.',
+  'admin-drive-secret-error': 'Google Drive 서버 보안 설정을 확인해주세요.',
+  'admin-drive-folder-read-error': 'Google Drive 폴더를 확인하지 못했습니다. 다시 시도해주세요.',
+  'admin-drive-folder-create-error': 'Google Drive 폴더를 생성하지 못했습니다. Drive 권한을 확인해주세요.',
+  'admin-drive-auth-error': 'Google Drive 인증을 갱신하지 못했습니다. 다시 연결해주세요.',
+  'admin-drive-timeout': 'Google Drive 응답 시간이 초과되었습니다. 다시 시도해주세요.',
+  'admin-drive-error': 'Google Drive 연결을 완료하지 못했습니다. 다시 시도해주세요.',
+};
+
+function consumeDriveCallbackHash() {
+  const status = window.location.hash.slice(1);
+  const message = driveCallbackMessages[status];
+  if (!message) return;
+  window.history.replaceState(null, '', window.location.pathname + window.location.search);
+  if (!state.isAdmin) return;
+  openModal(settingsModal);
+  driveConnectionStatus.textContent = message;
+  if (status === 'admin-drive-connected') loadAdminPanel().catch(() => {});
+}
+
 function randomFont(previous) {
   const available = fonts.filter((font) => font !== previous);
   return available[Math.floor(Math.random() * available.length)];
@@ -904,7 +928,10 @@ try {
   bindCommunityActions();
   bindAdminPasswordActions();
   bindAdminActions();
-  setupAuthSession().catch(() => {}).finally(loadCommunity);
+  setupAuthSession().catch(() => {}).finally(() => {
+    loadCommunity();
+    consumeDriveCallbackHash();
+  });
   startGalleryLoop();
 } catch (error) {
   console.error('portfolio_start_failed');
