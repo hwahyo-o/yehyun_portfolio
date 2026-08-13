@@ -129,12 +129,20 @@ button:focus-visible { outline: 2px solid var(--ink); outline-offset: 4px; }
   width: 20px;
   height: 20px;
   place-items: center;
-  border: 1px solid #333;
+  border: 1px solid currentColor;
   border-radius: 999px;
   background: #fff;
   box-shadow: 1px 2px 0 #000;
 }
-.gnb-nav-caret .bi { font-size: 11px; line-height: 1; }
+.gnb-nav-caret .bi { font-size: 14px; line-height: 1; }
+.gnb nav button:hover,
+.gnb nav button:focus-visible {
+  color: #6796FF;
+}
+.gnb nav button:hover .gnb-nav-caret,
+.gnb nav button:focus-visible .gnb-nav-caret {
+  box-shadow: 1px 2px 0 #0B5ED7;
+}
 .view-more .bi, .top-button .bi { font-size: .9em; }
 .project-thumb-media .bi { font-size: 1.8rem; }
 
@@ -735,8 +743,8 @@ button:focus-visible { outline: 2px solid var(--ink); outline-offset: 4px; }
 }
 .gallery-pagination-button img {
   position: absolute;
-  bottom: 11px;
-  left: 50%;
+  bottom: 6px;
+  left: 38%;
   display: none;
   width: 32px;
   transform: translateX(-50%);
@@ -810,7 +818,7 @@ body {
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  margin-left: auto;
+  margin-left: 0;
 }
 .gnb-tool {
   display: inline-grid;
