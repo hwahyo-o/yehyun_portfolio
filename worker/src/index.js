@@ -1263,25 +1263,6 @@ function readCookie(request, name) {
   return match ? decodeURIComponent(match.slice(name.length + 1)) : '';
 }
 
-function withCookie(response, value) {
-  const headers = new Headers(response.headers);
-  headers.set('Set-Cookie', 'portfolio_admin_session=' + encodeURIComponent(value) + '; Max-Age=315360000; Path=/; HttpOnly; Secure; SameSite=None');
-  return new Response(response.body, { status: response.status, headers });
-}
-
-function withVisitorSessionCookie(response, value) {
-  const headers = new Headers(response.headers);
-  headers.append('Set-Cookie', 'portfolio_visitor_session=' + encodeURIComponent(value) + '; Max-Age=31536000; Path=/; HttpOnly; Secure; SameSite=None');
-  return new Response(response.body, { status: response.status, headers });
-}
-
-function clearAllAuthCookies(response) {
-  const headers = new Headers(response.headers);
-  headers.append('Set-Cookie', 'portfolio_admin_session=; Max-Age=0; Path=/; HttpOnly; Secure; SameSite=None');
-  headers.append('Set-Cookie', 'portfolio_visitor_session=; Max-Age=0; Path=/; HttpOnly; Secure; SameSite=None');
-  return new Response(response.body, { status: response.status, headers });
-}
-
 function withVisitorCookie(response, visitorId) {
   const headers = new Headers(response.headers);
   if (!readCookieFromResponse(headers, 'portfolio_visitor_id')) {
