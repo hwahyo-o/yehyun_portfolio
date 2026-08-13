@@ -953,3 +953,29 @@ Gate: no-cookie 초기 요청 200/null, 유효 관리자 세션 200/user, 잘못
 ### 실패 재수정 Loop 및 검증
 
 실패한 Gate의 오류 코드·재현 조건만 기록하고 Firebase/OAuth/Worker Secret/D1/코드 중 원인을 좁혀 최소 변경으로 수정한 뒤 해당 Gate부터 재검증한다. 코드·문서·로그에는 API key, OAuth secret, Firebase UID, 관리자 이메일을 쓰지 않는다.
+
+
+## 33. 2026-08-13 기존 Firebase 관리자 Google Provider 연결 구현 계획
+
+### 문제와 원인
+
+기존 Firebase 이메일/비밀번호 관리자와 Google 로그인은 같은 이메일이라도 별도 Provider 신원이다. Google Provider를 기존 Firebase UID에 연결하지 않은 상태에서 일반 Google 로그인부터 시도하면 Firebase가 계정 연결을 요구하거나 별도 UID를 만들 수 있다. 후자는 private D1 UID allowlist와 일치하지 않아 관리자 접근이 거절된다.
+
+### 계층별 구현 범위
+
+- 화면: 관리자 설정에 **Google 계정 연결** 버튼과 성공·만료·이미 사용 중 오류 상태를 추가한다.
+- 처리: 현재 관리자 HttpOnly 세션을 확인한 뒤 Google OAuth state를 생성하고, 기존 로그인 callback에서 link state를 식별해 Firebase provider-link API로 전환한다.
+- 핵심 규칙: state는 현재 관리자 UID와 세션 hash에 묶고 10분 뒤 만료한다. 연결 결과 UID가 달라지거나 관리자가 아니면 거절한다.
+- 저장·외부 서비스: private D1에 일회성 link state만 저장한다. Firebase Auth가 Google credential을 기존 UID에 연결하며 Worker가 OAuth code·refresh token을 서버에서만 처리한다.
+- 의존성·시작: 새 browser SDK·공개 Secret은 추가하지 않는다. Worker 배포 때 additive schema/008을 먼저 적용한다.
+
+### Process Phase와 Gate
+
+1. State schema와 Worker link route를 추가한다. Gate: state가 세션 hash·UID·만료시각을 포함하고 재사용 뒤 삭제된다.
+2. Firebase accounts:update provider-link를 기존 callback에 연결한다. Gate: 성공 payload UID가 기존 UID와 같고 refresh token이 암호화되어 session에 갱신된다.
+3. 관리자 설정 화면과 hash 결과 메시지를 연결한다. Gate: link 요청은 관리자 세션에서만 시작되고 실패해도 Secret·UID가 화면에 드러나지 않는다.
+4. 정적 검사와 Actions를 통과한 뒤 main에 병합하고 Worker/Pages 배포를 확인한다. Gate: Worker schema apply 및 deploy 성공, Pages deploy 성공, 운영자가 이메일 로그인 -> 설정 -> Google 연결 -> Google 재로그인을 직접 확인한다.
+
+### 실패 재수정 Loop 및 검증 절차
+
+OAuth 교환 오류면 redirect URI와 OAuth client의 운영 설정을 확인한다. Firebase가 이미 연결됨을 반환하면 해당 Google identity가 다른 Firebase UID에 연결된 상태이므로 그 계정을 삭제·재생성하지 않고 Firebase Console에서 provider 소유 관계를 먼저 정리한다. state 만료면 기존 이메일/비밀번호로 다시 로그인해 새 연결을 시작한다. code, UID, 이메일, API key, client secret, refresh token은 로그·문서·소스에 남기지 않는다.
