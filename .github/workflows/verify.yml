@@ -31,6 +31,12 @@ jobs:
           test ! -e src/styles.css
           grep -q 'bootstrap@5.3.8/dist/css/bootstrap.min.css' index.html
           grep -q 'bootstrap-icons@1.13.1/font/bootstrap-icons.min.css' index.html
+          grep -q 'class="gnb-nav-caret"' index.html
+          grep -q 'bi bi-caret-down-fill' index.html
+          grep -q 'bi bi-lock-fill' index.html
+          grep -q 'border-bottom: 1px solid var(--pink)' styles.css
+          grep -q 'box-shadow: 1px 2px 0 #000' styles.css
+          grep -q 'width: 80px; height: 40px' styles.css
           grep -q 'integrity="sha384-sRIl4kxILFvY47J16cr9ZwB07vP4J8+LH7qKQnuqkuIAvNWLzeN8tE5YBujZqJLB"' index.html
           grep -q "type=\"module\" src=\"./app.js\"" index.html
           grep -q "import('./firebase-auth.js')" app.js
