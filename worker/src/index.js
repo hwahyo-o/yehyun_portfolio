@@ -38,6 +38,10 @@ async function route(request, env, ctx, visitorId) {
       const user = await optionalUser(request, env);
       return json({ user: user && { uid: user.claims.sub, role: user.role } });
     }
+    if (url.pathname === '/api/auth/ticket' && request.method === 'POST') {
+      requireCsrfHeader(request);
+      return exchangeAuthTicket(request, env);
+    }
     if (url.pathname === '/api/auth/logout' && request.method === 'POST') {
       requireCsrfHeader(request);
       return await logout(request, env);
@@ -894,68 +898,44 @@ function requireCsrfHeader(request) {
   }
 }
 
-async function requireAdmin(request, env) {
-  const sessionToken = readCookie(request, 'portfolio_admin_session');
-  if (sessionToken) {
-    requireCsrfHeader(request);
-    const sessionId = await hashSessionToken(sessionToken);
-    const row = await env.DB.prepare('SELECT id, uid, email, refresh_token_ciphertext, refresh_token_iv FROM admin_sessions WHERE id = ?').bind(sessionId).first();
-    if (!row) throw httpError('AUTH_REQUIRED', '관리자 로그인이 필요합니다.', 401);
-    try {
-      const refreshToken = await decryptSecret(row.refresh_token_ciphertext, row.refresh_token_iv, env.SESSION_ENCRYPTION_KEY);
-      const refreshed = await refreshFirebaseToken(refreshToken, env);
-      const claims = await verifyFirebaseToken(refreshed.idToken, env);
-      if (claims.sub !== row.uid || !await isAdmin(claims, env)) throw httpError('FORBIDDEN', '관리자 권한이 없습니다.', 403);
-      if (refreshed.refreshToken && refreshed.refreshToken !== refreshToken) {
-        const encrypted = await encryptSecret(refreshed.refreshToken, env.SESSION_ENCRYPTION_KEY);
-        await env.DB.prepare('UPDATE admin_sessions SET refresh_token_ciphertext = ?, refresh_token_iv = ?, updated_at = ? WHERE id = ?')
-          .bind(encrypted.ciphertext, encrypted.iv, new Date().toISOString(), sessionId).run();
-      } else {
-        await env.DB.prepare('UPDATE admin_sessions SET updated_at = ? WHERE id = ?').bind(new Date().toISOString(), sessionId).run();
-      }
-      return claims;
-    } catch (error) {
-      await env.DB.prepare('DELETE FROM admin_sessions WHERE id = ?').bind(sessionId).run();
-      if (error.code === 'FORBIDDEN') throw error;
-      throw httpError('AUTH_REQUIRED', '관리자 로그인이 만료되었습니다.', 401);
-    }
-  }
-  const token = getBearer(request);
-  if (!token) throw httpError('AUTH_REQUIRED', '관리자 로그인이 필요합니다.', 401);
-  const claims = await verifyFirebaseToken(token, env);
-  if (!await isAdmin(claims, env)) throw httpError('FORBIDDEN', '관리자 권한이 없습니다.', 403);
-  return claims;
-}
-
 async function requireUser(request, env) {
-  const adminSession = readCookie(request, 'portfolio_admin_session');
-  if (adminSession) return { claims: await requireAdmin(request, env), role: 'admin' };
-  const memberSession = readCookie(request, 'portfolio_visitor_session');
-  if (!memberSession) throw httpError('AUTH_REQUIRED', 'Google 로그인이 필요합니다.', 401);
+  const token = getBearer(request);
+  if (!token) throw httpError('AUTH_REQUIRED', '로그인이 필요합니다.', 401);
   requireCsrfHeader(request);
-  const sessionId = await hashSessionToken(memberSession);
-  const row = await env.DB.prepare('SELECT uid, refresh_token_ciphertext, refresh_token_iv FROM visitor_sessions WHERE id = ?').bind(sessionId).first();
-  if (!row) throw httpError('AUTH_REQUIRED', '로그인이 만료되었습니다.', 401);
+  const sessionId = await hashSessionToken(token);
+  const row = await env.DB.prepare('SELECT uid, role, refresh_token_ciphertext, refresh_token_iv, expires_at FROM auth_sessions WHERE id = ?').bind(sessionId).first();
+  if (!row || Date.parse(row.expires_at) <= Date.now()) {
+    if (row) await env.DB.prepare('DELETE FROM auth_sessions WHERE id = ?').bind(sessionId).run();
+    throw httpError('AUTH_REQUIRED', '로그인이 만료되었습니다.', 401);
+  }
   try {
     const refreshToken = await decryptSecret(row.refresh_token_ciphertext, row.refresh_token_iv, env.SESSION_ENCRYPTION_KEY);
     const refreshed = await refreshFirebaseToken(refreshToken, env);
     const claims = await verifyFirebaseToken(refreshed.idToken, env);
     if (claims.sub !== row.uid) throw httpError('AUTH_REQUIRED', '로그인이 만료되었습니다.', 401);
-    if (refreshed.refreshToken && refreshed.refreshToken !== refreshToken) {
+    if (refreshed.refreshToken !== refreshToken) {
       const encrypted = await encryptSecret(refreshed.refreshToken, env.SESSION_ENCRYPTION_KEY);
-      await env.DB.prepare('UPDATE visitor_sessions SET refresh_token_ciphertext = ?, refresh_token_iv = ?, updated_at = ? WHERE id = ?').bind(encrypted.ciphertext, encrypted.iv, new Date().toISOString(), sessionId).run();
+      await env.DB.prepare('UPDATE auth_sessions SET refresh_token_ciphertext = ?, refresh_token_iv = ?, updated_at = ? WHERE id = ?')
+        .bind(encrypted.ciphertext, encrypted.iv, new Date().toISOString(), sessionId).run();
     }
-    return { claims, role: 'member' };
-  } catch {
-    await env.DB.prepare('DELETE FROM visitor_sessions WHERE id = ?').bind(sessionId).run();
+    return { claims, role: row.role, sessionId };
+  } catch (error) {
+    await env.DB.prepare('DELETE FROM auth_sessions WHERE id = ?').bind(sessionId).run();
+    if (error.code === 'AUTH_REQUIRED') throw error;
     throw httpError('AUTH_REQUIRED', '로그인이 만료되었습니다.', 401);
   }
 }
 
+async function requireAdmin(request, env) {
+  const user = await requireUser(request, env);
+  if (user.role !== 'admin' || !await isAdmin(user.claims, env)) throw httpError('FORBIDDEN', '관리자 권한이 없습니다.', 403);
+  return user.claims;
+}
+
 async function optionalUser(request, env) {
-  if (!readCookie(request, 'portfolio_admin_session') && !readCookie(request, 'portfolio_visitor_session')) return null;
+  if (!getBearer(request)) return null;
   try { return await requireUser(request, env); } catch (error) {
-    if (error.status === 401 || error.status === 403) return null;
+    if (error.status === 401 || error.status ===403) return null;
     throw error;
   }
 }
@@ -995,9 +975,10 @@ async function startFirebaseGoogleLogin(env) {
 
 async function startFirebaseGoogleLink(request, env) {
   requireFirebaseGoogleConfig(env);
-  const claims = await requireAdmin(request, env);
-  const sessionToken = readCookie(request, 'portfolio_admin_session');
-  const sessionId = await hashSessionToken(sessionToken);
+  const user = await requireUser(request, env);
+  if (user.role !== 'admin' || !await isAdmin(user.claims, env)) throw httpError('FORBIDDEN', '관리자 권한이 없습니다.', 403);
+  const claims = user.claims;
+  const sessionId = user.sessionId;
   await env.DB.prepare('DELETE FROM firebase_google_link_states WHERE created_at < ?').bind(new Date(Date.now() - 10 * 60 * 1000).toISOString()).run();
   const state = crypto.randomUUID();
   await env.DB.prepare('INSERT INTO firebase_google_link_states (state, uid, session_id, created_at) VALUES (?, ?, ?, ?)')
@@ -1084,13 +1065,9 @@ async function finishFirebaseGoogleLogin(request, env, ctx) {
   try {
     const claims = await verifyFirebaseToken(firebasePayload.idToken, env);
     if (claims.sub !== firebasePayload.localId) return oauthRedirect(env, 'admin-google-login-error');
-    const isAdministrator = await isAdmin(claims, env);
-    const sessionResponse = isAdministrator
-      ? await createAdminSession(firebasePayload, claims.email || firebasePayload.email || '', env, claims, ctx)
-      : await createMemberSession(firebasePayload, claims.email || firebasePayload.email || '', env, 'google', claims, ctx);
-    const headers = new Headers(sessionResponse.headers);
-    headers.set('Location', (env.FRONTEND_URL || 'https://hwahyo-o.github.io/yehyun_portfolio') + (isAdministrator ? '/#admin-google-login-success' : '/#visitor-google-login-success'));
-    return new Response(null, { status: 302, headers });
+    const role = await isAdmin(claims, env) ? 'admin' : 'member';
+    const session = await issueAuthSession(firebasePayload, claims.email || firebasePayload.email || '', env, role, claims, ctx);
+    return oauthRedirect(env, 'auth-ticket=' + encodeURIComponent(await createAuthTicket(session.sessionToken, env)));
   } catch (error) {
     return oauthRedirect(env, googleErrorFragment(error.code));
   }
@@ -1103,7 +1080,7 @@ async function finishFirebaseGoogleLink(request, env, stateRow, code) {
   await env.DB.prepare('DELETE FROM firebase_google_link_states WHERE state = ?').bind(stateRow.state).run();
   if (expired || sessionId !== stateRow.session_id) return oauthRedirect(env, 'admin-google-link-expired');
 
-  const session = await env.DB.prepare('SELECT uid, refresh_token_ciphertext, refresh_token_iv FROM admin_sessions WHERE id = ?').bind(sessionId).first();
+  const session = await env.DB.prepare('SELECT uid, refresh_token_ciphertext, refresh_token_iv FROM auth_sessions WHERE id = ?').bind(sessionId).first();
   if (!session || session.uid !== stateRow.uid) return oauthRedirect(env, 'admin-google-link-expired');
 
   try {
@@ -1136,7 +1113,7 @@ async function finishFirebaseGoogleLink(request, env, stateRow, code) {
     const payload = await response.json();
     if (!payload.idToken || !payload.refreshToken || payload.localId !== stateRow.uid) return oauthRedirect(env, 'admin-google-link-error');
     const encrypted = await encryptSecret(payload.refreshToken, env.SESSION_ENCRYPTION_KEY);
-    await env.DB.prepare('UPDATE admin_sessions SET refresh_token_ciphertext = ?, refresh_token_iv = ?, updated_at = ? WHERE id = ?')
+    await env.DB.prepare('UPDATE auth_sessions SET refresh_token_ciphertext = ?, refresh_token_iv = ?, updated_at = ? WHERE id = ?')
       .bind(encrypted.ciphertext, encrypted.iv, new Date().toISOString(), sessionId).run();
     return oauthRedirect(env, 'admin-google-link-success');
   } catch (error) {
@@ -1214,44 +1191,54 @@ async function loginAdmin(request, env, ctx) {
   }
 }
 
-async function createMemberSession(payload, email, env, provider, claims = null, ctx) {
+async function issueAuthSession(payload, email, env, role, claims = null, ctx) {
   const resolvedClaims = claims || await verifyFirebaseToken(payload.idToken, env);
   if (resolvedClaims.sub !== payload.localId) throw httpError('AUTH_TOKEN_VERIFY_FAILED', '로그인 토큰을 확인할 수 없습니다.', 503);
-  const rawSession = crypto.randomUUID() + crypto.randomUUID();
+  if (role === 'admin' && !await isAdmin(resolvedClaims, env)) throw httpError('FORBIDDEN', '관리자 권한이 등록되지 않은 계정입니다.', 403);
+  const sessionToken = crypto.randomUUID() + crypto.randomUUID();
   const encrypted = await encryptSecret(payload.refreshToken, env.SESSION_ENCRYPTION_KEY);
   const now = new Date().toISOString();
-  await env.DB.prepare('INSERT INTO visitor_sessions (id, uid, email, provider, refresh_token_ciphertext, refresh_token_iv, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
-    .bind(await hashSessionToken(rawSession), resolvedClaims.sub, email || null, provider, encrypted.ciphertext, encrypted.iv, now, now).run();
-  await recordActivity(env, { eventId: crypto.randomUUID(), actorId: resolvedClaims.sub, actorType: 'member', action: 'auth.login', metadata: { provider } }, ctx);
-  return withVisitorSessionCookie(json({ user: { uid: resolvedClaims.sub, role: 'member' } }), rawSession);
+  const expiresAt = new Date(Date.now() + 12 * 60 * 60 * 1000).toISOString();
+  await env.DB.prepare('INSERT INTO auth_sessions (id, uid, role, refresh_token_ciphertext, refresh_token_iv, created_at, updated_at, expires_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
+    .bind(await hashSessionToken(sessionToken), resolvedClaims.sub, role, encrypted.ciphertext, encrypted.iv, now, now, expiresAt).run();
+  await recordActivity(env, { eventId: crypto.randomUUID(), actorId: resolvedClaims.sub, actorType: role, action: 'auth.login', metadata: {} }, ctx);
+  return { sessionToken, user: { uid: resolvedClaims.sub, role } };
+}
+
+async function createMemberSession(payload, email, env, provider, claims = null, ctx) {
+  return json(await issueAuthSession(payload, email, env, 'member', claims, ctx));
 }
 
 async function createAdminSession(payload, email, env, claims = null, ctx) {
-  const resolvedClaims = claims || await verifyFirebaseToken(payload.idToken, env);
-  if (resolvedClaims.sub !== payload.localId || !await isAdmin(resolvedClaims, env)) {
-    throw httpError('FORBIDDEN', '관리자 권한이 등록되지 않은 계정입니다.', 403);
-  }
-  try {
-    const rawSession = crypto.randomUUID() + crypto.randomUUID();
-    const encrypted = await encryptSecret(payload.refreshToken, env.SESSION_ENCRYPTION_KEY);
-    const now = new Date().toISOString();
-    await env.DB.prepare('INSERT INTO admin_sessions (id, uid, email, refresh_token_ciphertext, refresh_token_iv, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)')
-      .bind(await hashSessionToken(rawSession), resolvedClaims.sub, email, encrypted.ciphertext, encrypted.iv, now, now).run();
-    await recordActivity(env, { eventId: crypto.randomUUID(), actorId: resolvedClaims.sub, actorType: 'admin', action: 'auth.login', metadata: {} }, ctx);
-    return withCookie(json({ user: { uid: resolvedClaims.sub, email, role: 'admin' } }), rawSession);
-  } catch (error) {
-    if (error.code === 'SECRET_CONFIG_INVALID') throw error;
-    throw httpError('SESSION_STORE_FAILED', '관리자 세션을 저장할 수 없습니다.', 503);
-  }
+  return json(await issueAuthSession(payload, email, env, 'admin', claims, ctx));
 }
 
+async function createAuthTicket(sessionToken, env) {
+  const ticket = crypto.randomUUID() + crypto.randomUUID();
+  const encrypted = await encryptSecret(sessionToken, env.SESSION_ENCRYPTION_KEY);
+  await env.DB.prepare('INSERT INTO auth_callback_tickets (id, session_token_ciphertext, session_token_iv, created_at, expires_at) VALUES (?, ?, ?, ?, ?)')
+    .bind(await hashSessionToken(ticket), encrypted.ciphertext, encrypted.iv, new Date().toISOString(), new Date(Date.now() + 60 * 1000).toISOString()).run();
+  return ticket;
+}
+
+async function exchangeAuthTicket(request, env) {
+  const body = await request.json().catch(() => ({}));
+  const ticket = String(body.ticket || '');
+  if (!ticket) throw httpError('AUTH_TICKET_INVALID', '로그인 연결 정보가 없습니다.', 401);
+  const id = await hashSessionToken(ticket);
+  const row = await env.DB.prepare('SELECT session_token_ciphertext, session_token_iv, expires_at FROM auth_callback_tickets WHERE id = ?').bind(id).first();
+  await env.DB.prepare('DELETE FROM auth_callback_tickets WHERE id = ?').bind(id).run();
+  if (!row || Date.parse(row.expires_at) <= Date.now()) throw httpError('AUTH_TICKET_INVALID', '로그인 연결 정보가 만료되었습니다.', 401);
+  const sessionToken = await decryptSecret(row.session_token_ciphertext, row.session_token_iv, env.SESSION_ENCRYPTION_KEY);
+  const session = await env.DB.prepare('SELECT uid, role FROM auth_sessions WHERE id = ?').bind(await hashSessionToken(sessionToken)).first();
+  if (!session) throw httpError('AUTH_REQUIRED', '로그인이 만료되었습니다.', 401);
+  return json({ sessionToken, user: { uid: session.uid, role: session.role } });
+}
 
 async function logout(request, env) {
-  const adminSession = readCookie(request, 'portfolio_admin_session');
-  const memberSession = readCookie(request, 'portfolio_visitor_session');
-  if (adminSession) await env.DB.prepare('DELETE FROM admin_sessions WHERE id = ?').bind(await hashSessionToken(adminSession)).run();
-  if (memberSession) await env.DB.prepare('DELETE FROM visitor_sessions WHERE id = ?').bind(await hashSessionToken(memberSession)).run();
-  return clearAllAuthCookies(json({ ok: true }));
+  const token = getBearer(request);
+  if (token) await env.DB.prepare('DELETE FROM auth_sessions WHERE id = ?').bind(await hashSessionToken(token)).run();
+  return json({ ok: true });
 }
 
 async function refreshFirebaseToken(refreshToken, env) {
