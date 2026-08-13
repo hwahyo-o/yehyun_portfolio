@@ -33,7 +33,6 @@ DROP TABLE guestbook_comments;
 ALTER TABLE guestbook_comments_member RENAME TO guestbook_comments;
 ALTER TABLE guestbook_replies_member RENAME TO guestbook_replies;
 CREATE INDEX idx_guestbook_created ON guestbook_comments(created_at DESC);
-CREATE INDEX idx_messages_conversation ON messages(conversation_id, created_at ASC);
 ALTER TABLE conversations ADD COLUMN owner_uid TEXT;
 
 COMMIT;
