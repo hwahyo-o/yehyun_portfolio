@@ -1159,3 +1159,30 @@ Google OAuth 승인 뒤 Worker callback은 암호화된 Firebase ID token과 Dri
 ### 실패 Loop·검증
 
 정적 검증 뒤 배포한다. 운영자는 이메일 관리자 로그인 → Google 및 Drive 연결 → 권한 허용 → Portfolio-con 확인 → 로그아웃 → Google 관리자 로그인을 확인한다. 실패 시 안전한 fragment와 Worker 로그의 error code만 확인하며 token, password, UID, OAuth code, secret은 기록·공유하지 않는다.
+
+
+## 41. 2026-08-13 Google 계정 연결·Drive 연결 분리 재구성
+
+### 결정과 원인
+
+하나의 OAuth callback에서 Firebase Google Provider 연결, Drive refresh token 저장, Drive root 생성까지 처리하면 어느 한 단계의 실패가 전체 일반 오류로 합쳐진다. Provider가 성공한 뒤 Drive만 실패한 경우에도 결과를 되돌리려 해 상태가 불명확해진다. 따라서 두 기능을 독립 OAuth transaction으로 분리한다.
+
+### 계층별 범위
+
+- 화면: 설정을 Google 계정 연결과 Google Drive 연결 두 섹션으로 분리한다. Google 계정 연결만 이메일/비밀번호 재확인을 요구한다.
+- 처리: Provider link state는 기존 암호화된 일회성 state table을 재사용한다. Drive는 기존 google_oauth_states callback만 사용한다.
+- 핵심 규칙: Provider link 성공은 Drive 상태와 무관하며, Drive 실패는 Firebase Provider를 unlink하거나 세션을 변경하지 않는다.
+- 저장·외부 서비스: Drive callback이 Portfolio-con 및 Backups root를 모두 검증한 경우에만 connection/root metadata를 기록한다. 연결 해제는 Drive metadata만 삭제한다.
+- 의존성·시작: 브라우저 SDK와 공개 Secret을 추가하지 않는다. OAuth state, Firebase ID token, Drive refresh token은 Worker·D1 암호화 경계 밖으로 나가지 않는다.
+
+### Process Phase와 Gate
+
+1. 문서 선커밋. Gate: 이 계획이 구현보다 먼저 존재하고 민감값이 없다.
+2. Worker 재구성. Gate: admin Google link는 openid/email/profile만 요청하고, Drive callback은 Firebase account link를 호출하지 않는다.
+3. 화면 재구성. Gate: 계정 연결과 Drive 연결의 버튼·상태·실패 문구가 독립적이다.
+4. 정적·배포 검증. Gate: Worker 문법, OAuth route 계약, secret/UID 비노출 검사와 Actions가 통과한다.
+5. 운영 검증. Gate: 이메일 Admin → Google 계정 연결 → Google Admin 로그인 → Drive 연결 → Portfolio-con 확인을 순서대로 독립 확인한다.
+
+### 실패 시 재수정 Loop
+
+Google 계정 연결 실패는 Firebase provider-link 단계만, Drive 연결 실패는 token 교환·Drive root 단계만 수정한다. 어느 단계에서도 다른 연결 데이터를 삭제하지 않는다. 비밀번호, OAuth code, access/refresh token, Client Secret, UID는 문서·코드·로그에 기록하지 않는다.

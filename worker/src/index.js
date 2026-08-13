@@ -28,8 +28,8 @@ async function route(request, env, ctx, visitorId) {
     if (url.pathname === '/api/auth/google/start' && request.method === 'GET') {
       return await startFirebaseGoogleLogin(env);
     }
-    if (url.pathname === '/api/admin/google/setup/start' && request.method === 'POST') {
-      return startAdminGoogleSetup(request, env);
+    if (url.pathname === '/api/admin/google/link/start' && request.method === 'POST') {
+      return startAdminGoogleLink(request, env);
     }
     if (url.pathname === '/oauth/google/login-callback' && request.method === 'GET') {
       return await finishFirebaseGoogleLogin(request, env, ctx);
@@ -1008,7 +1008,7 @@ async function startFirebaseGoogleLogin(env) {
   return new Response(null, { status: 302, headers: { Location: googleAuthorizationUrl(env, state) } });
 }
 
-async function startAdminGoogleSetup(request, env) {
+async function startAdminGoogleLink(request, env) {
   requireFirebaseGoogleConfig(env);
   const user = await requireUser(request, env);
   if (user.role !== 'admin' || !await isAdmin(user.claims, env)) throw httpError('FORBIDDEN', '관리자 권한이 없습니다.', 403);
@@ -1035,36 +1035,20 @@ async function startAdminGoogleSetup(request, env) {
     env.DB.prepare('INSERT INTO admin_google_setup_states (state, uid, session_id, firebase_id_token_ciphertext, firebase_id_token_iv, created_at) VALUES (?, ?, ?, ?, ?, ?)')
       .bind(state, claims.sub, user.sessionId, encrypted.ciphertext, encrypted.iv, now),
   ]);
-  return json({ authorizationUrl: googleSetupAuthorizationUrl(env, state) });
+  return json({ authorizationUrl: googleAuthorizationUrl(env, state) });
 }
 
-function googleSetupAuthorizationUrl(env, state) {
-  const params = new URLSearchParams({
-    client_id: env.GOOGLE_CLIENT_ID,
-    redirect_uri: env.GOOGLE_LOGIN_REDIRECT_URI,
-    response_type: 'code',
-    scope: 'openid email profile https://www.googleapis.com/auth/drive.file',
-    access_type: 'offline',
-    prompt: 'consent',
-    state,
-  });
-  return 'https://accounts.google.com/o/oauth2/v2/auth?' + params.toString();
-}
-
-async function finishAdminGoogleSetup(env, stateRow, code) {
+async function finishAdminGoogleLink(env, stateRow, code) {
   const expired = Date.now() - Date.parse(stateRow.created_at) > 10 * 60 * 1000;
   await env.DB.prepare('DELETE FROM admin_google_setup_states WHERE state = ?').bind(stateRow.state).run();
-  if (expired) return oauthRedirect(env, 'admin-google-setup-expired');
+  if (expired) return oauthRedirect(env, 'admin-google-link-expired');
 
   try {
     const firebaseIdToken = await decryptSecret(stateRow.firebase_id_token_ciphertext, stateRow.firebase_id_token_iv, env.SESSION_ENCRYPTION_KEY);
     const claims = await verifyFirebaseToken(firebaseIdToken, env);
-    if (claims.sub !== stateRow.uid || !await isAdmin(claims, env)) return oauthRedirect(env, 'admin-google-setup-forbidden');
+    if (claims.sub !== stateRow.uid || !await isAdmin(claims, env)) return oauthRedirect(env, 'admin-google-link-forbidden');
 
     const googleToken = await exchangeGoogleAuthorizationCode(code, env);
-    const googleSubject = googleSubjectFromIdToken(googleToken.id_token);
-    if (!googleToken.refresh_token) return oauthRedirect(env, 'admin-google-setup-drive-token-error');
-
     const linked = await fetchWithTimeout(
       'https://identitytoolkit.googleapis.com/v1/accounts:update?key=' + encodeURIComponent(env.FIREBASE_WEB_API_KEY),
       {
@@ -1080,53 +1064,31 @@ async function finishAdminGoogleSetup(env, stateRow, code) {
     );
     if (!linked.ok) {
       const payload = await linked.json().catch(() => ({}));
-      return oauthRedirect(env, googleSetupErrorFragment(String(payload.error?.message || '')));
+      return oauthRedirect(env, googleLinkErrorFragment(String(payload.error?.message || '')));
     }
     const firebase = await linked.json();
-    if (!firebase.refreshToken || firebase.localId !== stateRow.uid) return oauthRedirect(env, 'admin-google-setup-link-error');
+    if (!firebase.refreshToken || firebase.localId !== stateRow.uid) return oauthRedirect(env, 'admin-google-link-error');
 
-    const driveSecret = await encryptSecret(googleToken.refresh_token, env.GOOGLE_TOKEN_ENCRYPTION_KEY);
-    const sessionSecret = await encryptSecret(firebase.refreshToken, env.SESSION_ENCRYPTION_KEY);
-    const now = new Date().toISOString();
-    await env.DB.batch([
-      env.DB.prepare('UPDATE auth_sessions SET refresh_token_ciphertext = ?, refresh_token_iv = ?, updated_at = ? WHERE id = ?')
-        .bind(sessionSecret.ciphertext, sessionSecret.iv, now, stateRow.session_id),
-      env.DB.prepare(`INSERT INTO google_drive_connections (id, uid, google_subject, refresh_token_ciphertext, refresh_token_iv, created_at, updated_at)
-        VALUES ('primary', ?, ?, ?, ?, ?, ?)
-        ON CONFLICT(id) DO UPDATE SET uid = excluded.uid, google_subject = excluded.google_subject, refresh_token_ciphertext = excluded.refresh_token_ciphertext, refresh_token_iv = excluded.refresh_token_iv, updated_at = excluded.updated_at`)
-        .bind(stateRow.uid, googleSubject, driveSecret.ciphertext, driveSecret.iv, now, now),
-    ]);
-    const accessToken = await getDriveAccessToken(env);
-    const rootId = await getOrCreateDriveFolder(accessToken, 'Portfolio-con');
-    await getOrCreateDriveFolder(accessToken, 'Backups', rootId);
-    await env.DB.prepare('INSERT INTO drive_storage_roots (id, drive_folder_id, verified_at) VALUES (?, ?, ?) ON CONFLICT(id) DO UPDATE SET drive_folder_id = excluded.drive_folder_id, verified_at = excluded.verified_at')
-      .bind('primary', rootId, now).run();
-    return oauthRedirect(env, 'admin-google-setup-success');
+    const encrypted = await encryptSecret(firebase.refreshToken, env.SESSION_ENCRYPTION_KEY);
+    await env.DB.prepare('UPDATE auth_sessions SET refresh_token_ciphertext = ?, refresh_token_iv = ?, updated_at = ? WHERE id = ?')
+      .bind(encrypted.ciphertext, encrypted.iv, new Date().toISOString(), stateRow.session_id).run();
+    return oauthRedirect(env, 'admin-google-link-success');
   } catch (error) {
-    await env.DB.batch([
-      env.DB.prepare('DELETE FROM google_drive_connections WHERE id = ?').bind('primary'),
-      env.DB.prepare('DELETE FROM drive_storage_roots WHERE id = ?').bind('primary'),
-    ]);
-    return oauthRedirect(env, googleSetupErrorFragment(error.code));
+    return oauthRedirect(env, googleLinkErrorFragment(error.code));
   }
 }
 
-function googleSetupErrorFragment(code) {
+function googleLinkErrorFragment(code) {
+  if (String(code || '').includes('FEDERATED_USER_ID_ALREADY_LINKED') || String(code || '').includes('EMAIL_EXISTS')) return 'admin-google-link-in-use';
+  if (String(code || '').includes('CREDENTIAL_TOO_OLD_LOGIN_AGAIN') || String(code || '').includes('INVALID_ID_TOKEN')) return 'admin-google-link-relogin';
   const fragments = {
-    AUTH_FAILED: 'admin-google-setup-relogin',
-    AUTH_UPSTREAM_TIMEOUT: 'admin-google-setup-timeout',
-    AUTH_TOKEN_VERIFY_FAILED: 'admin-google-setup-relogin',
-    FORBIDDEN: 'admin-google-setup-forbidden',
-    GOOGLE_OAUTH_FAILED: 'admin-google-setup-oauth-error',
-    DRIVE_NOT_CONFIGURED: 'admin-google-setup-drive-secret-error',
-    DRIVE_AUTH_FAILED: 'admin-google-setup-drive-auth-error',
-    DRIVE_FOLDER_READ_FAILED: 'admin-google-setup-drive-folder-read-error',
-    DRIVE_FOLDER_CREATE_FAILED: 'admin-google-setup-drive-folder-create-error',
-    SECRET_CONFIG_INVALID: 'admin-google-setup-drive-secret-error',
+    AUTH_FAILED: 'admin-google-link-relogin',
+    AUTH_UPSTREAM_TIMEOUT: 'admin-google-link-timeout',
+    AUTH_TOKEN_VERIFY_FAILED: 'admin-google-link-relogin',
+    FORBIDDEN: 'admin-google-link-forbidden',
+    GOOGLE_OAUTH_FAILED: 'admin-google-link-oauth-error',
   };
-  if (String(code || '').includes('FEDERATED_USER_ID_ALREADY_LINKED') || String(code || '').includes('EMAIL_EXISTS')) return 'admin-google-setup-in-use';
-  if (String(code || '').includes('CREDENTIAL_TOO_OLD_LOGIN_AGAIN') || String(code || '').includes('INVALID_ID_TOKEN')) return 'admin-google-setup-relogin';
-  return fragments[code] || 'admin-google-setup-link-error';
+  return fragments[code] || 'admin-google-link-error';
 }
 
 function firebaseAuthErrorCode(payload) {
@@ -1161,8 +1123,8 @@ async function finishFirebaseGoogleLogin(request, env, ctx) {
   const code = url.searchParams.get('code') || '';
   if (!state || !code) return oauthRedirect(env, 'admin-google-login-error');
 
-  const setupState = await env.DB.prepare('SELECT state, uid, session_id, firebase_id_token_ciphertext, firebase_id_token_iv, created_at FROM admin_google_setup_states WHERE state = ?').bind(state).first();
-  if (setupState) return finishAdminGoogleSetup(env, setupState, code);
+  const linkState = await env.DB.prepare('SELECT state, uid, session_id, firebase_id_token_ciphertext, firebase_id_token_iv, created_at FROM admin_google_setup_states WHERE state = ?').bind(state).first();
+  if (linkState) return finishAdminGoogleLink(env, linkState, code);
 
   const stateRow = await env.DB.prepare('SELECT state, created_at FROM firebase_google_login_states WHERE state = ?').bind(state).first();
   if (!stateRow || Date.now() - Date.parse(stateRow.created_at) > 10 * 60 * 1000) return oauthRedirect(env, 'admin-google-login-expired');
