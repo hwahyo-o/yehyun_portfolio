@@ -601,21 +601,7 @@ function driveOAuthErrorFragment(code) {
   return 'admin-drive-token-error';
 }
 
-function googleLinkErrorFragment(reason) {
-  if (reason.includes('FEDERATED_USER_ID_ALREADY_LINKED') || reason.includes('EMAIL_EXISTS')) return 'admin-google-link-in-use';
-  if (reason.includes('CREDENTIAL_TOO_OLD_LOGIN_AGAIN') || reason.includes('INVALID_ID_TOKEN')) return 'admin-google-link-relogin';
-  if (reason.includes('OPERATION_NOT_ALLOWED') || reason.includes('INVALID_PROVIDER_ID')) return 'admin-google-link-provider-disabled';
-  if (reason.includes('INVALID_IDP_RESPONSE') || reason.includes('INVALID_PENDING_TOKEN')) return 'admin-google-link-oauth-error';
-  return 'admin-google-link-error';
-}
 
-function firebaseRequestUri(env) {
-  try {
-    return new URL(env.FRONTEND_URL || 'https://hwahyo-o.github.io/yehyun_portfolio').origin;
-  } catch {
-    return 'https://hwahyo-o.github.io';
-  }
-}
 
 function oauthRedirect(env, status) {
   const origin = env.FRONTEND_URL || 'https://hwahyo-o.github.io/yehyun_portfolio';
@@ -954,103 +940,10 @@ async function isAdmin(claims, env) {
   return Boolean(await env.DB.prepare('SELECT uid FROM admin_roles WHERE uid = ?').bind(claims.sub).first());
 }
 
-function requireFirebaseGoogleConfig(env) {
-  if (!env.GOOGLE_CLIENT_ID || !env.GOOGLE_CLIENT_SECRET || !env.GOOGLE_LOGIN_REDIRECT_URI || !env.FIREBASE_WEB_API_KEY) {
-    throw httpError('GOOGLE_LOGIN_NOT_CONFIGURED', 'Google 로그인 설정이 필요합니다.', 503);
-  }
-}
 
-function googleAuthorizationUrl(env, state) {
-  const params = new URLSearchParams({
-    client_id: env.GOOGLE_CLIENT_ID,
-    redirect_uri: env.GOOGLE_LOGIN_REDIRECT_URI,
-    response_type: 'code',
-    scope: 'openid email profile',
-    access_type: 'online',
-    prompt: 'select_account',
-    state,
-  });
-  return 'https://accounts.google.com/o/oauth2/v2/auth?' + params.toString();
-}
 
-async function startFirebaseGoogleLogin(env) {
-  requireFirebaseGoogleConfig(env);
-  await env.DB.prepare('DELETE FROM firebase_google_login_states WHERE created_at < ?').bind(new Date(Date.now() - 10 * 60 * 1000).toISOString()).run();
-  const state = crypto.randomUUID();
-  await env.DB.prepare('INSERT INTO firebase_google_login_states (state, created_at) VALUES (?, ?)')
-    .bind(state, new Date().toISOString()).run();
-  return new Response(null, { status: 302, headers: { Location: googleAuthorizationUrl(env, state) } });
-}
 
-async function startAdminGoogleLink(request, env) {
-  requireFirebaseGoogleConfig(env);
-  const user = await requireUser(request, env);
-  if (user.role !== 'admin' || !await isAdmin(user.claims, env)) throw httpError('FORBIDDEN', '관리자 권한이 없습니다.', 403);
 
-  const body = await request.json().catch(() => ({}));
-  const email = String(body.email || '').trim();
-  const password = String(body.password || '');
-  if (!email || !password || password.length > 256) throw httpError('AUTH_FAILED', '이메일과 비밀번호를 다시 확인해주세요.', 401);
-
-  const response = await fetchWithTimeout(
-    'https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=' + encodeURIComponent(env.FIREBASE_WEB_API_KEY),
-    { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email, password, returnSecureToken: true }) },
-  );
-  if (!response.ok) throw httpError('AUTH_FAILED', '이메일과 비밀번호를 다시 확인해주세요.', 401);
-  const credentials = await response.json();
-  const claims = await verifyFirebaseToken(credentials.idToken, env);
-  if (claims.sub !== user.claims.sub || !await isAdmin(claims, env)) throw httpError('FORBIDDEN', '현재 관리자 계정과 일치하지 않습니다.', 403);
-
-  const encrypted = await encryptSecret(credentials.idToken, env.SESSION_ENCRYPTION_KEY);
-  const state = crypto.randomUUID();
-  const now = new Date().toISOString();
-  await env.DB.batch([
-    env.DB.prepare('DELETE FROM admin_google_setup_states WHERE created_at < ?').bind(new Date(Date.now() - 10 * 60 * 1000).toISOString()),
-    env.DB.prepare('INSERT INTO admin_google_setup_states (state, uid, session_id, firebase_id_token_ciphertext, firebase_id_token_iv, created_at) VALUES (?, ?, ?, ?, ?, ?)')
-      .bind(state, claims.sub, user.sessionId, encrypted.ciphertext, encrypted.iv, now),
-  ]);
-  return json({ authorizationUrl: googleAuthorizationUrl(env, state) });
-}
-
-async function finishAdminGoogleLink(env, stateRow, code) {
-  const expired = Date.now() - Date.parse(stateRow.created_at) > 10 * 60 * 1000;
-  await env.DB.prepare('DELETE FROM admin_google_setup_states WHERE state = ?').bind(stateRow.state).run();
-  if (expired) return oauthRedirect(env, 'admin-google-link-expired');
-
-  try {
-    const firebaseIdToken = await decryptSecret(stateRow.firebase_id_token_ciphertext, stateRow.firebase_id_token_iv, env.SESSION_ENCRYPTION_KEY);
-    const claims = await verifyFirebaseToken(firebaseIdToken, env);
-    if (claims.sub !== stateRow.uid || !await isAdmin(claims, env)) return oauthRedirect(env, 'admin-google-link-forbidden');
-
-    const googleToken = await exchangeGoogleAuthorizationCode(code, env);
-    const linked = await fetchWithTimeout(
-      'https://identitytoolkit.googleapis.com/v1/accounts:update?key=' + encodeURIComponent(env.FIREBASE_WEB_API_KEY),
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          idToken: firebaseIdToken,
-          postBody: new URLSearchParams({ id_token: googleToken.id_token, providerId: 'google.com' }).toString(),
-          returnSecureToken: true,
-          returnIdpCredential: false,
-        }),
-      },
-    );
-    if (!linked.ok) {
-      const payload = await linked.json().catch(() => ({}));
-      return oauthRedirect(env, googleLinkErrorFragment(String(payload.error?.message || '')));
-    }
-    const firebase = await linked.json();
-    if (!firebase.refreshToken || firebase.localId !== stateRow.uid) return oauthRedirect(env, 'admin-google-link-error');
-
-    const encrypted = await encryptSecret(firebase.refreshToken, env.SESSION_ENCRYPTION_KEY);
-    await env.DB.prepare('UPDATE auth_sessions SET refresh_token_ciphertext = ?, refresh_token_iv = ?, updated_at = ? WHERE id = ?')
-      .bind(encrypted.ciphertext, encrypted.iv, new Date().toISOString(), stateRow.session_id).run();
-    return oauthRedirect(env, 'admin-google-link-success');
-  } catch (error) {
-    return oauthRedirect(env, googleLinkErrorFragment(error.code));
-  }
-}
 
 function firebaseAuthErrorCode(payload) {
   const reason = String(payload?.error?.message || '');
@@ -1060,221 +953,18 @@ function firebaseAuthErrorCode(payload) {
   return 'AUTH_SERVICE_ERROR';
 }
 
-async function exchangeGoogleAuthorizationCode(code, env) {
-  const response = await fetchWithTimeout('https://oauth2.googleapis.com/token', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: new URLSearchParams({
-      client_id: env.GOOGLE_CLIENT_ID || '',
-      client_secret: env.GOOGLE_CLIENT_SECRET || '',
-      code,
-      grant_type: 'authorization_code',
-      redirect_uri: env.GOOGLE_LOGIN_REDIRECT_URI || '',
-    }),
-  });
-  if (!response.ok) throw httpError('GOOGLE_OAUTH_FAILED', 'Google 인증 교환에 실패했습니다.', 502);
-  const token = await response.json();
-  if (!token.id_token) throw httpError('GOOGLE_OAUTH_FAILED', 'Google 인증 토큰이 없습니다.', 502);
-  return token;
-}
-
-async function finishFirebaseGoogleLogin(request, env, ctx) {
-  const url = new URL(request.url);
-  const state = url.searchParams.get('state') || '';
-  const code = url.searchParams.get('code') || '';
-  if (!state || !code) return oauthRedirect(env, 'admin-google-login-error');
-
-  const linkState = await env.DB.prepare('SELECT state, uid, session_id, firebase_id_token_ciphertext, firebase_id_token_iv, created_at FROM admin_google_setup_states WHERE state = ?').bind(state).first();
-  if (linkState) return finishAdminGoogleLink(env, linkState, code);
-
-  const stateRow = await env.DB.prepare('SELECT state, created_at FROM firebase_google_login_states WHERE state = ?').bind(state).first();
-  if (!stateRow || Date.now() - Date.parse(stateRow.created_at) > 10 * 60 * 1000) return oauthRedirect(env, 'admin-google-login-expired');
-  await env.DB.prepare('DELETE FROM firebase_google_login_states WHERE state = ?').bind(state).run();
-
-  let googleToken;
-  try {
-    googleToken = await exchangeGoogleAuthorizationCode(code, env);
-  } catch (error) {
-    return oauthRedirect(env, googleErrorFragment(error.code));
-  }
-
-  let firebaseResponse;
-  try {
-    firebaseResponse = await fetchWithTimeout(
-      'https://identitytoolkit.googleapis.com/v1/accounts:signInWithIdp?key=' + encodeURIComponent(env.FIREBASE_WEB_API_KEY || ''),
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          postBody: new URLSearchParams({ id_token: googleToken.id_token, providerId: 'google.com' }).toString(),
-          requestUri: firebaseRequestUri(env),
-          returnSecureToken: true,
-          returnIdpCredential: false,
-          autoCreate: true,
-        }),
-      },
-    );
-  } catch (error) {
-    return oauthRedirect(env, googleErrorFragment(error.code));
-  }
-  if (!firebaseResponse.ok) {
-    const firebaseError = await firebaseResponse.json().catch(() => ({}));
-    const reason = String(firebaseError.error?.message || '');
-    if (reason.includes('INVALID_API_KEY') || reason.includes('API_KEY_INVALID')) return oauthRedirect(env, 'admin-google-login-not-configured');
-    if (reason.includes('EMAIL_EXISTS') || reason.includes('FEDERATED_USER_ID_ALREADY_LINKED')) return oauthRedirect(env, 'admin-google-login-link-required');
-    if (reason.includes('OPERATION_NOT_ALLOWED') || reason.includes('INVALID_PROVIDER_ID')) return oauthRedirect(env, 'admin-google-login-provider-disabled');
-    return oauthRedirect(env, 'admin-google-login-provider-error');
-  }
-  const firebasePayload = await firebaseResponse.json();
-  if (!firebasePayload.idToken || !firebasePayload.refreshToken || !firebasePayload.localId) return oauthRedirect(env, 'admin-google-login-provider-error');
-
-  try {
-    const claims = await verifyFirebaseToken(firebasePayload.idToken, env);
-    if (claims.sub !== firebasePayload.localId) return oauthRedirect(env, 'admin-google-login-error');
-    const role = await isAdmin(claims, env) ? 'admin' : 'member';
-    const session = await issueAuthSession(firebasePayload, claims.email || firebasePayload.email || '', env, role, claims, ctx);
-    return oauthRedirect(env, 'auth-ticket=' + encodeURIComponent(await createAuthTicket(session.sessionToken, env)));
-  } catch (error) {
-    return oauthRedirect(env, googleErrorFragment(error.code));
-  }
-}
 
 
-function googleErrorFragment(code) {
-  const fragments = {
-    AUTH_NOT_CONFIGURED: 'admin-google-login-not-configured',
-    CERTS_UNAVAILABLE: 'admin-google-login-certificates-error',
-    INVALID_TOKEN: 'admin-google-login-token-error',
-    SECRET_CONFIG_INVALID: 'admin-google-login-secret-error',
-    SESSION_STORE_FAILED: 'admin-google-login-session-error',
-    FORBIDDEN: 'admin-google-login-forbidden',
-    AUTH_UPSTREAM_TIMEOUT: 'admin-google-login-timeout',
-    AUTH_PROVIDER_DISABLED: 'admin-google-login-provider-disabled',
-    AUTH_TOKEN_VERIFY_FAILED: 'admin-google-login-token-error',
-    GOOGLE_OAUTH_FAILED: 'admin-google-login-oauth-error',
-  };
-  return fragments[code] || 'admin-google-login-error';
-}
 
-async function loginAdmin(request, env, ctx) {
-  const body = await request.json().catch(() => ({}));
-  const email = String(body.email || '').trim();
-  const password = String(body.password || '');
-  if (!email || password.length < 1 || password.length > 256) {
-    throw httpError('AUTH_FAILED', '이메일 또는 비밀번호를 확인해주세요.', 401);
-  }
-  if (!env.DB || !env.FIREBASE_WEB_API_KEY || !env.SESSION_ENCRYPTION_KEY) {
-    throw httpError('AUTH_NOT_CONFIGURED', '관리자 로그인을 사용할 수 없습니다.', 503);
-  }
 
-  let payload;
-  try {
-    const response = await fetchWithTimeout('https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=' + encodeURIComponent(env.FIREBASE_WEB_API_KEY), {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email, password, returnSecureToken: true }),
-    });
-    if (!response.ok) {
-      const failure = await response.json().catch(() => ({}));
-      const code = firebaseAuthErrorCode(failure);
-      throw httpError(code, code === 'AUTH_FAILED' ? '이메일 또는 비밀번호를 확인해주세요.' : 'Firebase 로그인 설정을 확인해주세요.', code === 'AUTH_FAILED' ? 401 : 503);
-    }
-    payload = await response.json();
-  } catch (error) {
-    if (error.code) throw error;
-    throw httpError('AUTH_SERVICE_ERROR', 'Firebase 로그인 서비스를 확인할 수 없습니다.', 503);
-  }
 
-  if (!payload?.idToken || !payload?.refreshToken || !payload?.localId) {
-    throw httpError('AUTH_SERVICE_ERROR', 'Firebase 로그인 응답을 확인할 수 없습니다.', 503);
-  }
 
-  let claims;
-  try {
-    claims = await verifyFirebaseToken(payload.idToken, env);
-  } catch (error) {
-    if (error.code === 'FORBIDDEN') throw error;
-    if (error.code === 'INVALID_TOKEN') throw httpError('AUTH_TOKEN_VERIFY_FAILED', '로그인 토큰을 확인할 수 없습니다.', 503);
-    throw error;
-  }
-  if (claims.sub !== payload.localId) {
-    throw httpError('AUTH_TOKEN_VERIFY_FAILED', '로그인 토큰을 확인할 수 없습니다.', 503);
-  }
-  if (!await isAdmin(claims, env)) throw httpError('FORBIDDEN', '관리자 권한이 등록되지 않은 계정입니다.', 403);
 
-  try {
-    return await createAdminSession(payload, email, env, claims, ctx);
-  } catch (error) {
-    if (error.code === 'SECRET_CONFIG_INVALID') throw error;
-    throw httpError('SESSION_STORE_FAILED', '관리자 세션을 저장할 수 없습니다.', 503);
-  }
-}
 
-async function issueAuthSession(payload, email, env, role, claims = null, ctx) {
-  const resolvedClaims = claims || await verifyFirebaseToken(payload.idToken, env);
-  if (resolvedClaims.sub !== payload.localId) throw httpError('AUTH_TOKEN_VERIFY_FAILED', '로그인 토큰을 확인할 수 없습니다.', 503);
-  if (role === 'admin' && !await isAdmin(resolvedClaims, env)) throw httpError('FORBIDDEN', '관리자 권한이 등록되지 않은 계정입니다.', 403);
-  const sessionToken = crypto.randomUUID() + crypto.randomUUID();
-  const encrypted = await encryptSecret(payload.refreshToken, env.SESSION_ENCRYPTION_KEY);
-  const now = new Date().toISOString();
-  const expiresAt = new Date(Date.now() + 12 * 60 * 60 * 1000).toISOString();
-  await env.DB.prepare('INSERT INTO auth_sessions (id, uid, role, refresh_token_ciphertext, refresh_token_iv, created_at, updated_at, expires_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
-    .bind(await hashSessionToken(sessionToken), resolvedClaims.sub, role, encrypted.ciphertext, encrypted.iv, now, now, expiresAt).run();
-  await recordActivity(env, { eventId: crypto.randomUUID(), actorId: resolvedClaims.sub, actorType: role, action: 'auth.login', metadata: {} }, ctx);
-  return { sessionToken, user: { uid: resolvedClaims.sub, role } };
-}
 
-async function createMemberSession(payload, email, env, provider, claims = null, ctx) {
-  return json(await issueAuthSession(payload, email, env, 'member', claims, ctx));
-}
 
-async function createAdminSession(payload, email, env, claims = null, ctx) {
-  return json(await issueAuthSession(payload, email, env, 'admin', claims, ctx));
-}
 
-async function createAuthTicket(sessionToken, env) {
-  const ticket = crypto.randomUUID() + crypto.randomUUID();
-  const encrypted = await encryptSecret(sessionToken, env.SESSION_ENCRYPTION_KEY);
-  await env.DB.prepare('INSERT INTO auth_callback_tickets (id, session_token_ciphertext, session_token_iv, created_at, expires_at) VALUES (?, ?, ?, ?, ?)')
-    .bind(await hashSessionToken(ticket), encrypted.ciphertext, encrypted.iv, new Date().toISOString(), new Date(Date.now() + 60 * 1000).toISOString()).run();
-  return ticket;
-}
 
-async function exchangeAuthTicket(request, env) {
-  const body = await request.json().catch(() => ({}));
-  const ticket = String(body.ticket || '');
-  if (!ticket) throw httpError('AUTH_TICKET_INVALID', '로그인 연결 정보가 없습니다.', 401);
-  const id = await hashSessionToken(ticket);
-  const row = await env.DB.prepare('SELECT session_token_ciphertext, session_token_iv, expires_at FROM auth_callback_tickets WHERE id = ?').bind(id).first();
-  await env.DB.prepare('DELETE FROM auth_callback_tickets WHERE id = ?').bind(id).run();
-  if (!row || Date.parse(row.expires_at) <= Date.now()) throw httpError('AUTH_TICKET_INVALID', '로그인 연결 정보가 만료되었습니다.', 401);
-  const sessionToken = await decryptSecret(row.session_token_ciphertext, row.session_token_iv, env.SESSION_ENCRYPTION_KEY);
-  const session = await env.DB.prepare('SELECT uid, role FROM auth_sessions WHERE id = ?').bind(await hashSessionToken(sessionToken)).first();
-  if (!session) throw httpError('AUTH_REQUIRED', '로그인이 만료되었습니다.', 401);
-  return json({ sessionToken, user: { uid: session.uid, role: session.role } });
-}
-
-async function logout(request, env) {
-  const token = getBearer(request);
-  if (token) await env.DB.prepare('DELETE FROM auth_sessions WHERE id = ?').bind(await hashSessionToken(token)).run();
-  return json({ ok: true });
-}
-
-async function refreshFirebaseToken(refreshToken, env) {
-  const response = await fetchWithTimeout('https://securetoken.googleapis.com/v1/token?key=' + encodeURIComponent(env.FIREBASE_WEB_API_KEY), {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: new URLSearchParams({ grant_type: 'refresh_token', refresh_token: refreshToken }),
-  });
-  if (!response.ok) throw httpError('AUTH_REQUIRED', '관리자 로그인이 만료되었습니다.', 401);
-  const payload = await response.json();
-  return { idToken: payload.id_token, refreshToken: payload.refresh_token || refreshToken };
-}
-
-async function hashSessionToken(value) {
-  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(value));
-  return encode(new Uint8Array(digest));
-}
 
 function readCookie(request, name) {
   const header = request.headers.get('Cookie') || '';
