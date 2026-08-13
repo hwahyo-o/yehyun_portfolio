@@ -2,7 +2,7 @@ name: Verify static portfolio
 
 on:
   push:
-    branches: [drill, drill-oauth-rebuild, drill-oauth-token-fix, drill-auth-rebuild]
+    branches: [drill, drill-oauth-rebuild, drill-oauth-token-fix, drill-auth-rebuild, drill-auth-rebuild-fix]
   pull_request:
     branches: [main]
 
@@ -62,6 +62,8 @@ jobs:
           ! grep -q 'JSON.parse(decode(' worker/src/index.js
           grep -q 'finishAdminGoogleLink' worker/src/index.js
           grep -q 'googleLinkErrorFragment' worker/src/index.js
+          test "$(grep -c '^function googleLinkErrorFragment' worker/src/index.js)" -eq 1
+          npx --yes wrangler@4.121.0 deploy --dry-run --config worker/wrangler.toml
           ! grep -q 'finishAdminGoogleSetup' worker/src/index.js
           grep -q "getOrCreateDriveFolder(accessToken, 'Backups', rootId)" worker/src/index.js
           grep -q 'drive_storage_roots' worker/src/index.js
