@@ -438,7 +438,7 @@ async function listUpdates(env) {
 }
 
 async function listGuestbook(env) {
-  const result = await env.DB.prepare('SELECT id, name, content, created_at AS date FROM guestbook_comments WHERE deleted_at IS NULL ORDER BY created_at DESC LIMIT 10').all();
+  const result = await env.DB.prepare('SELECT id, name, author_uid, content, created_at AS date FROM guestbook_comments WHERE deleted_at IS NULL ORDER BY created_at DESC LIMIT 10').all();
   const items = result.results || [];
   if (!items.length) return json({ items: [] });
   const placeholders = items.map(() => '?').join(', ');
