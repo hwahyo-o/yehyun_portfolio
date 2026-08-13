@@ -1031,8 +1031,8 @@ async function startAdminGoogleSetup(request, env) {
   const state = crypto.randomUUID();
   const now = new Date().toISOString();
   await env.DB.batch([
-    env.DB.prepare('DELETE FROM firebase_google_link_states WHERE created_at < ?').bind(new Date(Date.now() - 10 * 60 * 1000).toISOString()),
-    env.DB.prepare('INSERT INTO firebase_google_link_states (state, uid, session_id, firebase_id_token_ciphertext, firebase_id_token_iv, created_at) VALUES (?, ?, ?, ?, ?, ?)')
+    env.DB.prepare('DELETE FROM admin_google_setup_states WHERE created_at < ?').bind(new Date(Date.now() - 10 * 60 * 1000).toISOString()),
+    env.DB.prepare('INSERT INTO admin_google_setup_states (state, uid, session_id, firebase_id_token_ciphertext, firebase_id_token_iv, created_at) VALUES (?, ?, ?, ?, ?, ?)')
       .bind(state, claims.sub, user.sessionId, encrypted.ciphertext, encrypted.iv, now),
   ]);
   return json({ authorizationUrl: googleSetupAuthorizationUrl(env, state) });
@@ -1053,7 +1053,7 @@ function googleSetupAuthorizationUrl(env, state) {
 
 async function finishAdminGoogleSetup(env, stateRow, code) {
   const expired = Date.now() - Date.parse(stateRow.created_at) > 10 * 60 * 1000;
-  await env.DB.prepare('DELETE FROM firebase_google_link_states WHERE state = ?').bind(stateRow.state).run();
+  await env.DB.prepare('DELETE FROM admin_google_setup_states WHERE state = ?').bind(stateRow.state).run();
   if (expired) return oauthRedirect(env, 'admin-google-setup-expired');
 
   try {
@@ -1161,7 +1161,7 @@ async function finishFirebaseGoogleLogin(request, env, ctx) {
   const code = url.searchParams.get('code') || '';
   if (!state || !code) return oauthRedirect(env, 'admin-google-login-error');
 
-  const setupState = await env.DB.prepare('SELECT state, uid, session_id, firebase_id_token_ciphertext, firebase_id_token_iv, created_at FROM firebase_google_link_states WHERE state = ?').bind(state).first();
+  const setupState = await env.DB.prepare('SELECT state, uid, session_id, firebase_id_token_ciphertext, firebase_id_token_iv, created_at FROM admin_google_setup_states WHERE state = ?').bind(state).first();
   if (setupState) return finishAdminGoogleSetup(env, setupState, code);
 
   const stateRow = await env.DB.prepare('SELECT state, created_at FROM firebase_google_login_states WHERE state = ?').bind(state).first();
