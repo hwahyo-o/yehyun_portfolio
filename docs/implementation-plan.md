@@ -1482,3 +1482,18 @@ Drive OAuth는 Google consent 화면과 authorization code 반환까지 성공�
 3. **간격 Gate**: active 장식은 원본 비율을 보존한 32px 폭이고, 페이지네이션과 title 이미지가 겹치지 않으며 데스크톱 18px·기타 12px 이상 분리된다.
 4. **동작 Gate**: 무한 루프와 상호작용 후 자동재생은 유지하며, 자동재생 간격은 1200ms다. reduced-motion에서는 자동재생하지 않는다.
 5. **검증 Gate**: 정적 CI·배포 검증을 통과하고, 실패하면 해당 Gate부터 최소 수정으로 재검증한다.
+
+
+---
+
+## 2026-08-13 Gallery Corner 방향별 그림자 보정
+
+### 범위와 Gate
+
+- 대상: `styles.css`의 Gallery 코너 프레임 그림자만.
+- 좌상단 `drop-shadow(-5px 5px 0 rgba(0, 0, 0, 1))`
+- 우상단 `drop-shadow(5px 5px 0 rgba(0, 0, 0, 1))`
+- 좌하단 `drop-shadow(-5px -5px 0 rgba(0, 0, 0, 1))`
+- 우하단 `drop-shadow(5px -5px 0 rgba(0, 0, 0, 1))`
+- Gate: 공통 그림자를 제거하고 네 위치별 selector가 각각 정확한 값을 가져야 하며, 기존 회전·반전·Swiper 동작은 변경하지 않는다.
+- 검증: CI 정적 검사와 GitHub Pages 배포가 성공해야 한다. 실패 시 이 CSS 범위에서만 재수정한다.
