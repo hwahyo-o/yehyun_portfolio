@@ -824,7 +824,7 @@ document.addEventListener('click', (event) => {
   if (action === 'admin-logout') {
     apiRequest('/api/auth/logout', { method: 'POST' })
       .finally(() => {
-        setAdminUi(false);
+        setUserUi(null);
         clearInterval(state.adminTimer);
         clearInterval(state.notificationTimer);
       });
