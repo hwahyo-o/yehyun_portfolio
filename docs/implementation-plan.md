@@ -1311,3 +1311,32 @@ Drive OAuth는 Google consent 화면과 authorization code 반환까지 성공�
 - 암호화 실패는 GOOGLE_TOKEN_ENCRYPTION_KEY 형식만 점검한다.
 - Drive API/폴더 실패는 Drive API 활성화·drive.file 권한·해당 API 응답만 점검한다.
 - 각 실패는 callback의 안전한 fragment만 비교하며 Cloudflare 1101, raw token, OAuth code, refresh token, UID를 노출하지 않는다.
+
+
+## 47. 2026-08-13 Firebase 세션 Worker 500 복구
+
+### 문제와 원인
+
+- 이메일/비밀번호와 Firebase Google 로그인은 모두 인증 후 `GET /api/auth/session`으로 Firebase ID 토큰을 서버에서 검증한다.
+- Worker의 Firebase 검증과 Google Drive OAuth 토큰 교환은 `fetchWithTimeout`을 호출하지만, 배포 소스에 이 공통 함수 정의가 없다.
+- 호출 시 발생한 `ReferenceError`가 Worker의 일반 500 응답으로 변환되어, 두 로그인 방식이 동일하게 실패한다.
+
+### 처리 구조
+
+- **화면:** 기존 로그인 모달은 서버 오류 메시지를 유지한다.
+- **처리:** 한 개의 `fetchWithTimeout` 헬퍼가 Firebase Identity Toolkit과 Google OAuth HTTP 호출을 수행한다.
+- **핵심 규칙:** 외부 호출은 제한 시간 뒤 중단하고, 일반 네트워크 오류와 시간 초과를 안전한 Worker 오류로 변환한다.
+- **저장·외부 서비스:** Firebase/D1/Google Drive 구성값·권한·데이터는 변경하지 않는다.
+- **의존성 및 시작 계층:** 새 패키지나 런타임 의존성을 추가하지 않는다.
+
+### Phase와 Gate
+
+1. 문서 갱신 — 원인·복구 범위·검증 조건을 기록한다.
+2. Worker 복구 — 누락 헬퍼를 한 번만 정의한다.
+3. 정적 검증 — 정의와 사용처, JavaScript 문법, Wrangler dry-run을 확인한다.
+4. PR·배포 — Actions 성공 뒤에만 main 병합한다.
+
+### 실패 재수정 Loop
+
+- 검증 실패 시 호출부와 헬퍼 시그니처를 대조하고, 최소 수정 후 Phase 3을 반복한다.
+- 배포 후에도 500이 지속되면 새 응답 코드와 Worker 비밀값 존재 여부만 확인하고, Firebase/D1 데이터를 변경하지 않는다.
