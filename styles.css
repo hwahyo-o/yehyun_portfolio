@@ -675,13 +675,12 @@ button:focus-visible { outline: 2px solid var(--ink); outline-offset: 4px; }
   z-index: 4;
   width: 128px;
   height: 128px;
-  filter: drop-shadow(5px 5px 0 rgba(0, 0, 0, 1));
   pointer-events: none;
 }
-.gallery-corner-tl { top: 0; left: calc(50% - 552px); transform: scaleX(-1); }
-.gallery-corner-tr { top: 0; right: calc(50% - 552px); }
-.gallery-corner-bl { top: 580px; left: calc(50% - 552px); transform: rotate(180deg); }
-.gallery-corner-br { top: 580px; right: calc(50% - 552px); transform: scaleY(-1); }
+.gallery-corner-tl { top: 0; left: calc(50% - 552px); filter: drop-shadow(-5px 5px 0 rgba(0, 0, 0, 1)); transform: scaleX(-1); }
+.gallery-corner-tr { top: 0; right: calc(50% - 552px); filter: drop-shadow(5px 5px 0 rgba(0, 0, 0, 1)); }
+.gallery-corner-bl { top: 580px; left: calc(50% - 552px); filter: drop-shadow(-5px -5px 0 rgba(0, 0, 0, 1)); transform: rotate(180deg); }
+.gallery-corner-br { top: 580px; right: calc(50% - 552px); filter: drop-shadow(5px -5px 0 rgba(0, 0, 0, 1)); transform: scaleY(-1); }
 .hero-frame .gallery-title-decoration {
   position: absolute;
   z-index: 5;
