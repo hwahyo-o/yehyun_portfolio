@@ -1539,3 +1539,5 @@ Drive OAuth는 Google consent 화면과 authorization code 반환까지 성공�
 - 버튼 높이, active 장식 이미지 크기, 접근성 라벨, Swiper 상태 연동은 변경하지 않는다.
 - Gate: CSS에 확정 폭 두 값이 있고 CI가 이를 확인하며, 정적 CI·GitHub Pages 배포가 성공해야 한다.
 - 실패 시 Gallery Pagination CSS·CI 범위에서만 최소 재수정한다.
+
+- CI 실행 추적: 버튼 폭과 CI 검증 파일을 포함한 최신 브랜치 커밋에서 PR 검증을 재실행한다.
