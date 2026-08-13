@@ -37,40 +37,11 @@ jobs:
           ! grep -x 'async' app.js
           grep -q 'portfolio_start_failed' app.js
           grep -q 'https://www.gstatic.com' index.html
-          grep -q 'signInWithPopup' firebase-auth.js
-          grep -q 'linkWithPopup' firebase-auth.js
-          grep -q 'firebase: null' config.js
-          ! grep -q 'bootstrap.bundle.min.js\|bootstrap.min.js\|@popperjs' index.html
-          node --input-type=module --check < app.js
-          node --input-type=module --check < firebase-auth.js
-          test -f worker/src/index.js
-          test -f worker/schema/001_initial.sql
-          test -f worker/schema/010_drive_storage_root.sql
-          grep -q '/api/auth/session' worker/src/index.js
-          grep -q '/api/admin/drive/start' worker/src/index.js
-          grep -q 'verifyFirebaseToken(token, env)' worker/src/index.js
-          grep -q 'requireUser' worker/src/index.js
-          grep -q 'Access-Control-Allow-Headers.*, Authorization\|Authorization, Content-Type' worker/src/index.js
-          grep -q 'function decodeBytes' worker/src/index.js
-          grep -q 'googleSubjectFromIdToken' worker/src/index.js
-          grep -q "getOrCreateDriveFolder(accessToken, 'Backups', rootId)" worker/src/index.js
-          grep -q 'drive_storage_roots' worker/src/index.js
-          grep -q "google-link-form" app.js
-          grep -q "data-action=\"drive-connect\"" index.html
-          grep -q 'author_uid' worker/src/index.js
-          ! grep -Eq '/api/auth/google/start|/api/auth/login|/api/auth/ticket|/api/auth/logout|/api/admin/google/link/start|auth_sessions|auth_callback_tickets|accounts:update|admin_google_setup_states|firebase_id_token_ciphertext|startFirebaseGoogleLogin|finishFirebaseGoogleLogin|loginAdmin' worker/src/index.js
-          ! grep -q 'password_salt\|password_hash\|ADMIN_EMAIL' worker/src/index.js
-          ! sed -n '/id="guestbook-form"/,/\/form>/p' index.html | grep -q 'name="password"'
-          ! grep -R "BEGIN PRIVATE KEY\|GOCSPX-[0-9A-Za-z_-]\{20,\}\|ADMIN_PIN\|4896\|1234" --exclude-dir=.git --exclude-dir=.github --exclude='*.example' .
-          ! grep -R "from 'react'\|from 'react-dom'\|@vitejs/plugin-react" --exclude-dir=.git --exclude-dir=.github --exclude='*.yml' .
-          npx --yes wrangler@4.121.0 deploy --dry-run --config worker/wrangler.toml
- app.js
-          grep -q 'portfolio_start_failed' app.js
-          grep -q 'https://www.gstatic.com' index.html
           grep -q 'signInWithEmailAndPassword' firebase-auth.js
           grep -q 'signInWithPopup' firebase-auth.js
           grep -q 'linkWithPopup' firebase-auth.js
-          grep -q 'firebase: null' config.js
+          grep -q 'firebase:' config.js
+          ! grep -q 'firebase: null' config.js
           ! grep -q 'bootstrap.bundle.min.js\|bootstrap.min.js\|@popperjs' index.html
           node --input-type=module --check < app.js
           node --input-type=module --check < firebase-auth.js
