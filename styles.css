@@ -119,22 +119,22 @@ button:focus-visible { outline: 2px solid var(--ink); outline-offset: 4px; }
   gap: 6px;
   padding: 4px 0;
   color: var(--portfolio-text, #333);
-  font-size: 15px;
+  font-size: 18px;
   font-weight: 700;
   line-height: 22.8px;
   white-space: nowrap;
 }
 .gnb-nav-caret {
   display: inline-grid;
-  width: 20px;
-  height: 20px;
+  width: 24px;
+  height: 24px;
   place-items: center;
   border: 1px solid currentColor;
   border-radius: 999px;
   background: #fff;
   box-shadow: 1px 2px 0 #000;
 }
-.gnb-nav-caret .bi { font-size: 14px; line-height: 1; }
+.gnb-nav-caret .bi { font-size: 20px; font-weight: 900; line-height: 1; }
 .gnb nav button:hover,
 .gnb nav button:focus-visible {
   color: #6796FF;

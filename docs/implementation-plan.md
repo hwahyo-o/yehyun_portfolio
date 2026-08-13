@@ -1633,3 +1633,25 @@ Drive OAuth는 Google consent 화면과 authorization code 반환까지 성공�
 - 메뉴 동작 회귀는 data attribute와 기존 app.js event delegation 연결만 복구한다.
 - active 이미지 표시 회귀는 해당 CSS position만 수정한다.
 - 정적 검증은 확정 CSS 값·Bootstrap icon class·기존 동작 식별자를 검사한다. CI 실패 시 실패 Gate부터 재실행한다.
+
+
+---
+
+## 2026-08-14 GNB Nav 글자·화살표·아이콘 칩 크기 보정
+
+### 계층별 범위
+
+- 화면: GNB nav 버튼 텍스트, `bi-arrow-right-short`, 원형 아이콘 칩의 시각 크기만 변경한다.
+- 처리: route/scroll, theme, admin/session 및 hover 색상·shadow 규칙은 유지한다.
+- 핵심 규칙: nav 텍스트는 18px, 화살표는 20px·font-weight 900, 칩은 24×24px이다.
+- 저장·외부 서비스: 변경 없음.
+- 의존성·시작: 기존 Bootstrap Icons와 app.js를 재사용하며 패키지를 추가하지 않는다.
+
+### Phase·Gate·실패 Loop
+
+1. 문서 Gate — 본 절을 구현 전 커밋한다.
+2. CSS Gate — 확정값 세 가지가 GNB selector에 각각 한 번의 명확한 규칙으로 존재한다.
+3. 회귀 Gate — 메뉴 icon class, data-route, data-scroll-target, hover/focus 색상과 shadow가 유지된다.
+4. 검증·배포 Gate — CI와 Pages 배포가 성공한 PR만 main에 병합한다.
+
+- 실패 시 GNB CSS·CI 범위만 최소 수정하고 실패한 Gate부터 재검증한다. 비밀값·외부 서비스 상태는 변경하거나 기록하지 않는다.
