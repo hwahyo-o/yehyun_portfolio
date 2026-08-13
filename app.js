@@ -57,6 +57,7 @@ const notificationCenter = document.querySelector('#notification-center');
 const notificationList = document.querySelector('#notification-list');
 const notificationCount = document.querySelector('#notification-count');
 const driveConnectionStatus = document.querySelector('#drive-connection-status');
+const googleLinkStatus = document.querySelector('#google-link-status');
 const backupList = document.querySelector('#backup-list');
 const backupListStatus = document.querySelector('#backup-list-status');
 const backupStatus = document.querySelector('#backup-status');
@@ -662,6 +663,14 @@ function handleGoogleLoginCallback() {
     'admin-google-login-forbidden': 'Google 계정이 관리자 권한으로 등록되지 않았습니다.',
     'admin-google-login-expired': 'Google 로그인 요청이 만료되었습니다. 다시 시도해주세요.',
     'admin-google-login-link-required': '기존 Firebase 이메일 계정과 Google 계정 연결이 필요합니다.',
+    'admin-google-link-success': 'Google 계정 연결이 완료되었습니다. 다음부터 Google 로그인으로 관리자 모드에 접속할 수 있습니다.',
+    'admin-google-link-expired': 'Google 계정 연결 요청이 만료되었습니다. 이메일/비밀번호로 다시 로그인한 뒤 재시도해주세요.',
+    'admin-google-link-forbidden': '현재 관리자 세션으로 Google 계정을 연결할 권한이 없습니다.',
+    'admin-google-link-in-use': '이 Google 계정은 다른 Firebase 사용자에 이미 연결되어 있습니다.',
+    'admin-google-link-oauth-error': 'Google 인증 교환에 실패했습니다. Redirect URI와 OAuth Client 설정을 확인해주세요.',
+    'admin-google-link-provider-disabled': 'Firebase Google Provider가 비활성화되어 있습니다.',
+    'admin-google-link-timeout': 'Google 인증 서버 응답 시간이 초과되었습니다. 잠시 후 다시 시도해주세요.',
+    'admin-google-link-error': 'Google 계정 연결에 실패했습니다. 다시 시도해주세요.',
     'admin-google-login-oauth-error': 'Google OAuth 교환에 실패했습니다. Redirect URI와 OAuth Client 설정을 확인해주세요.',
     'admin-google-login-provider-error': 'Firebase Google 인증에 실패했습니다. Google Provider 설정을 확인해주세요.',
     'admin-google-login-provider-disabled': 'Firebase Google Provider가 비활성화되어 있습니다.',
@@ -674,9 +683,11 @@ function handleGoogleLoginCallback() {
     'admin-google-login-error': 'Google 로그인에 실패했습니다. 설정을 확인해주세요.',
   };
   if (!messages[result]) return;
-  const status = result.startsWith('admin-') ? adminLoginStatus : memberLoginStatus;
+  const isLinkResult = result.startsWith('admin-google-link-');
+  const status = isLinkResult ? googleLinkStatus : result.startsWith('admin-') ? adminLoginStatus : memberLoginStatus;
   status.textContent = messages[result];
-  if (!result.endsWith('-success')) openModal(result.startsWith('admin-') ? adminLoginModal : memberLoginModal);
+  if (isLinkResult) openModal(settingsModal);
+  else if (!result.endsWith('-success')) openModal(result.startsWith('admin-') ? adminLoginModal : memberLoginModal);
   window.history.replaceState(null, '', window.location.pathname + window.location.search);
 }
 
@@ -834,6 +845,15 @@ document.addEventListener('click', (event) => {
     apiRequest('/api/admin/drive/start', { headers: { Accept: 'application/json' } })
       .then((payload) => { window.location.href = payload.authorizationUrl; })
       .catch((error) => { driveConnectionStatus.textContent = error.message; });
+  }
+  if (action === 'google-link') {
+    if (!apiBase) googleLinkStatus.textContent = '로그인 서버가 설정되지 않았습니다.';
+    else {
+      googleLinkStatus.textContent = 'Google 계정 선택 화면으로 이동 중…';
+      apiRequest('/api/auth/google/link/start', { headers: { Accept: 'application/json' } })
+        .then((payload) => { window.location.assign(payload.authorizationUrl); })
+        .catch((error) => { googleLinkStatus.textContent = error.message; });
+    }
   }
   if (action === 'drive-disconnect') {
     if (window.confirm('Google Drive 연결을 끊을까요? 백업 파일은 삭제되지 않습니다.')) {
