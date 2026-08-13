@@ -2,6 +2,21 @@ const FIRESTORE_TOKEN_URL = 'https://oauth2.googleapis.com/token';
 const FIRESTORE_SCOPE = 'https://www.googleapis.com/auth/datastore';
 let firestoreTokenCache = { accessToken: '', expiresAt: 0 };
 
+async function fetchWithTimeout(input, init = {}, timeoutMs = 12000) {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(input, { ...init, signal: controller.signal });
+  } catch (error) {
+    if (error?.name === 'AbortError') {
+      throw httpError('UPSTREAM_TIMEOUT', '인증 서비스 응답 시간이 초과되었습니다. 잠시 후 다시 시도해주세요.', 504);
+    }
+    throw error;
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}
+
 export default {
   async fetch(request, env, ctx) {
     const origin = request.headers.get('Origin');
