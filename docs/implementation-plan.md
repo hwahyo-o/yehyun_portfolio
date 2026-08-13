@@ -1497,3 +1497,23 @@ Drive OAuth는 Google consent 화면과 authorization code 반환까지 성공�
 - 우하단 `drop-shadow(5px -5px 0 rgba(0, 0, 0, 1))`
 - Gate: 공통 그림자를 제거하고 네 위치별 selector가 각각 정확한 값을 가져야 하며, 기존 회전·반전·Swiper 동작은 변경하지 않는다.
 - 검증: CI 정적 검사와 GitHub Pages 배포가 성공해야 한다. 실패 시 이 CSS 범위에서만 재수정한다.
+
+
+---
+
+## 2026-08-13 Gallery Overlap 및 Gmail 작성 링크 보정
+
+### 변경 범위
+
+- Gallery title과 페이지네이션의 의도적 겹침: 데스크톱 기준 -18px, 데스크톱 외 -8px.
+- Swiper 자동재생: 3000ms. 무한 루프, 상호작용 후 재생 유지, reduced-motion 정지는 유지한다.
+- Contact Email 카드는 새 탭의 Gmail 편지쓰기 URL을 열고, 공개 연락처 주소를 `to` 쿼리로 전달한다.
+- 수신자 주소는 이미 사이트의 공개 연락처로 사용 중이며, 사용자가 이 링크와 본 작업 문서에서의 공개 사용을 승인했다. 비밀번호·API 키·토큰 등 비밀값은 기록하지 않는다.
+
+### Gate와 검증
+
+1. 문서 Gate: 본 절이 구현 전에 커밋된다.
+2. Gallery Gate: 데스크톱 -18px·기타 -8px 겹침값 및 3000ms가 코드에 하나의 기준값으로 존재한다.
+3. Email Gate: 카드의 외부 링크가 Gmail 편지쓰기 화면을 사용하고 새 탭·안전한 opener 정책을 적용한다.
+4. 검증 Gate: CI가 간격·자동재생·Gmail URL을 확인하고 GitHub Pages 배포가 성공한다.
+5. 실패 Loop: 실패한 Gate의 변경 파일만 최소 수정 후 같은 검증부터 반복한다.
