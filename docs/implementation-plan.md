@@ -1600,3 +1600,36 @@ Drive OAuth는 Google consent 화면과 authorization code 반환까지 성공�
 - 메뉴/테마/관리자 동작 실패는 data attribute와 기존 app.js handler의 연결만 복구한다. 인증·저장소 코드는 변경하지 않는다.
 - CI 실패는 실패한 정적 조건만 현재 디자인 값으로 조정한 뒤 동일 Gate를 재실행한다.
 - 검증은 HTML/CSS 정적 조건, JavaScript module syntax, 데스크톱·모바일 레이아웃, menu route/scroll, theme toggle, admin-session hidden 상태, PR CI, Pages 배포 순서로 수행한다.
+
+
+---
+
+## 2026-08-14 GNB 간격·화살표 Hover 및 Active 페이지네이션 위치 보정
+
+### 범위와 계층
+
+- 화면: GNB의 로고·메뉴·도구 세 구역, Gallery active 페이지네이션 장식만 변경한다.
+- 처리: 메뉴 route/scroll, theme, admin-login 및 Swiper 상태 연동은 기존 data attribute와 app.js를 그대로 사용한다.
+- 핵심 규칙: GNB 세 직접 자식은 `justify-content: space-between`으로 배치하며, `.gnb-tools`가 추가 자동 여백을 만들지 않는다. 메뉴 아이콘은 Bootstrap `bi-arrow-right-short`이고, hover·focus-visible에서 메뉴 내용은 `#6796FF`, 아이콘 칩 그림자는 `#0B5ED7`이다.
+- 저장·외부 서비스: localStorage, Firebase, Worker, D1, Google Drive는 변경하지 않는다.
+- 의존성·시작: 기존 Bootstrap Icons·Swiper·app.js 초기화만 재사용한다.
+
+### 확정값
+
+- `.gallery-pagination-button img`: `left: 38%`, `bottom: 6px`.
+- GNB: `.gnb-tools { margin-left: 0; }`로 보정한다.
+
+### Process Phase 및 Gate
+
+1. **문서 Gate** — 이 절을 구현 전 브랜치에 커밋하고 비밀정보를 기록하지 않는다.
+2. **구조 Gate** — 메뉴 button의 route/scroll 속성과 관리자·테마 식별자를 유지하면서 아이콘 class만 교체한다.
+3. **표시 Gate** — active 이미지 위치가 확정값을 사용하고 데스크톱에서 GNB 세 구역의 분배 간격이 균일하다.
+4. **상태 Gate** — hover/focus-visible의 텍스트·아이콘 색상과 아이콘 칩 shadow 색상이 확정값이며, theme/admin/session 상태는 유지된다.
+5. **검증·배포 Gate** — 정적 CI와 데스크톱·모바일 레이아웃 확인을 통과한 PR만 main에 병합하고 Pages 배포 성공을 확인한다.
+
+### 실패 시 재수정 Loop 및 검증
+
+- 간격 불일치는 GNB flex margin·gap만 최소 수정한다.
+- 메뉴 동작 회귀는 data attribute와 기존 app.js event delegation 연결만 복구한다.
+- active 이미지 표시 회귀는 해당 CSS position만 수정한다.
+- 정적 검증은 확정 CSS 값·Bootstrap icon class·기존 동작 식별자를 검사한다. CI 실패 시 실패 Gate부터 재실행한다.
