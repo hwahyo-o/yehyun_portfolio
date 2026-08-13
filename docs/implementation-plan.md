@@ -1191,3 +1191,30 @@ Google 계정 연결 실패는 Firebase provider-link 단계만, Drive 연결 �
 ## 42. 2026-08-13 Worker module duplicate declaration hotfix
 
 Cloudflare Worker deploy에서 기존 googleLinkErrorFragment와 동일 이름의 helper가 추가되어 ES-module build가 거부됐다. 기존 helper를 재사용하고 중복 선언을 제거한다. Gate: Wrangler build와 Worker deploy가 성공해야 하며, Pages 화면과 Worker route 계약이 다시 일치해야 한다. 실패 시 이 단일 build error만 수정·재배포한다.
+
+
+## 43. 2026-08-13 Firebase 웹 SDK 기반 인증 단순화
+
+### 결정
+
+Firebase Authentication은 브라우저 Firebase Web SDK가 담당한다. Cloudflare Worker는 Firebase ID token을 server-side lookup으로 확인하고 D1 admin_roles에 따른 역할만 반환한다. Google Provider link와 Google sign-in callback, opaque auth_sessions, callback ticket, Firebase refresh token 저장을 제거한다. Google Drive OAuth와 암호화된 Drive refresh token 저장은 Worker에 유지한다.
+
+### 계층별 구조
+
+- 화면: Firebase 이메일/비밀번호 로그인, Google popup 로그인, 이메일 관리자 계정의 linkWithPopup을 사용한다. 로그인 후 Firebase ID token을 sessionStorage에 보관하고 SDK가 갱신한다.
+- 처리: Worker는 POST /api/auth/session으로 받은 Bearer Firebase ID token을 확인하고 D1 역할을 반환한다. Google Drive 연결 요청만 OAuth state를 사용한다.
+- 핵심 규칙: 이메일/비밀번호 로그인은 admin_roles UID만 Admin으로 허용한다. Google 로그인은 같은 allowlist UID면 Admin, 나머지는 Member다.
+- 저장·외부 서비스: Firebase Web config와 OAuth Client ID는 공개 웹 식별값이다. OAuth Client Secret, Drive refresh token, Cloudflare/GitHub token은 Worker Secret으로만 유지한다.
+- 의존성·시작: Firebase CDN module을 CSP allow-list로 사용한다. config.js에는 Firebase public config가 있을 때만 SDK를 초기화하며, 누락 시 안전한 설정 안내를 표시한다.
+
+### Process Phase와 Gate
+
+1. 문서 선커밋. Gate: 비밀값·비밀번호·UID·Drive token이 없다.
+2. Worker 인증 단순화. Gate: Firebase ID token -> D1 role 확인만 남고 Worker Google login/link callback과 auth_sessions 의존이 제거된다.
+3. 화면 인증 전환. Gate: Firebase email/password, Google popup, linkWithPopup, logout, token refresh가 역할 UI와 연결된다.
+4. Drive 독립성. Gate: Drive OAuth는 Firebase admin ID token으로 시작하며 계정 연결 실패와 상태를 공유하지 않는다.
+5. 검증·배포. Gate: static checks, Worker module build, Pages/Worker deploy 성공을 확인하고 실제 Firebase config 등록 후 Guest/Member/Admin/Drive 흐름을 운영자가 확인한다.
+
+### 실패 Loop와 운영 설정
+
+Firebase config가 누락되면 UI는 로그인 요청을 보내지 않고 설정 안내만 표시한다. Worker 오류는 Google Provider·Drive와 분리해 해당 route만 수정한다. 배포 후 운영자는 Firebase Console의 웹 앱 config를 config.js에 publicFirebaseConfig로 입력하고, Authorized domains에 GitHub Pages 도메인이 있는지 확인한다. API key, OAuth secret, token, UID, password는 문서·로그·채팅에 기록하지 않는다.
