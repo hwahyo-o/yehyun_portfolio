@@ -1017,3 +1017,20 @@ GitHub Pages와 workers.dev의 교차 사이트 HttpOnly 쿠키는 브라우저�
 ### 실패 재수정 Loop
 
 각 실패는 login, role lookup, session exchange, provider link 중 한 단계 코드로만 분류한다. 그 단계의 안전한 오류 code와 Network 상태를 확인한 뒤 최소 수정 후 같은 Gate부터 반복한다. email, UID, password, API key, OAuth code, token, client secret은 코드·문서·로그에 기록하지 않는다.
+
+
+## 35. 2026-08-13 Bearer Authorization CORS 차단 수정
+
+### 관찰과 원인
+
+배포된 browser app은 opaque bearer session을 Authorization header로 전송한다. Worker CORS preflight의 Access-Control-Allow-Headers에는 Authorization이 없어 GitHub Pages origin의 GET /api/auth/session 요청이 브라우저에서 차단된다. Firebase, D1 UID allowlist, 세션 검증 함수는 이 요청에 도달하지 않는다. autocomplete 경고는 관련이 없다.
+
+### Process Phase와 Gate
+
+1. Worker CORS allow-list에 Authorization만 추가한다. Gate: 기존 허용 origin·methods·CSRF header 정책은 변경하지 않는다.
+2. 정적 검증에 Authorization allow-list 문자열을 추가한다. Gate: Worker와 app의 Bearer header 계약이 함께 존재해야 한다.
+3. drill CI, PR, main Worker/Pages 배포를 확인한다. Gate: preflight가 Authorization을 허용하고 /api/auth/session이 CORS 차단 없이 응답한다.
+
+### 실패 재수정 Loop
+
+CORS 오류가 남으면 Network의 OPTIONS 응답에서 allow-origin, allow-headers, allow-methods를 확인하고 정확히 누락된 항목만 추가한다. 허용 origin을 wildcard로 완화하거나 credentials·Secret·UID를 노출하지 않는다.
