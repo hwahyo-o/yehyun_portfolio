@@ -1141,3 +1141,21 @@ Personal Google storage is shared and limited; uploads remain constrained to the
 - Worker 오류: request ID/안전한 error code를 로그에 남기고 해당 handler만 수정한다.
 
 정적 검증은 Worker 문법, UI hash-message 계약, secret/UID 비노출, 상태 정리 쿼리를 검사한다. 배포 후 운영자는 이메일 관리자 로그인 → 통합 연동 → Drive의 Portfolio-con 확인 → 로그아웃 → Google 관리자 로그인을 확인한다. API key, client secret, OAuth code, access/refresh token, 비밀번호, UID는 코드·문서·Actions 로그에 기록하지 않는다.
+
+
+## 40. 2026-08-13 Google OAuth callback 복호화 누락 수정
+
+### 확인된 원인
+
+Google OAuth 승인 뒤 Worker callback은 암호화된 Firebase ID token과 Drive refresh token을 복호화한다. 이 경로가 사용하는 decodeBytes helper가 Worker에 정의되어 있지 않아 ReferenceError가 발생했다. 예외는 일반 연결 실패 fragment로 변환되었고, Drive connection/root는 rollback되어 Portfolio-con 폴더가 만들어지지 않았다.
+
+### 수정 범위·Gate
+
+- URL-safe Base64와 표준 Base64 양쪽을 처리하는 decodeBytes helper를 Worker에 추가한다.
+- Google ID token payload는 URL-safe Base64 decoder로 읽고, payload가 잘못되면 안전한 OAuth error로 반환한다.
+- 통합 Google setup과 독립 Drive callback이 같은 decoder를 사용하도록 한다.
+- Gate: decryptSecret, Google subject 추출, Drive access-token 재발급에서 undefined decoder 참조가 없고 Worker 문법·static 검증을 통과한다.
+
+### 실패 Loop·검증
+
+정적 검증 뒤 배포한다. 운영자는 이메일 관리자 로그인 → Google 및 Drive 연결 → 권한 허용 → Portfolio-con 확인 → 로그아웃 → Google 관리자 로그인을 확인한다. 실패 시 안전한 fragment와 Worker 로그의 error code만 확인하며 token, password, UID, OAuth code, secret은 기록·공유하지 않는다.
