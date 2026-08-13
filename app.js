@@ -610,10 +610,10 @@ function startAdminScheduler() {
   state.notificationTimer = setInterval(() => loadNotifications().catch(() => {}), 30000);
 }
 
-async function verifyAuthSession() {
+async function verifyAuthSession({ reportError = false } = {}) {
   try {
     const client = await firebaseClient();
-    if (!client) throw new Error('FIREBASE_WEB_CONFIG_MISSING');
+    if (!client) throw Object.assign(new Error('Firebase 웹 설정이 필요합니다.'), { code: 'FIREBASE_WEB_CONFIG_MISSING' });
     const payload = await apiRequest('/api/auth/session');
     const user = payload.user || null;
     setUserUi(user);
@@ -630,10 +630,11 @@ async function verifyAuthSession() {
       resumeMemberAction();
     }
     return user;
-  } catch {
+  } catch (error) {
     setUserUi(null);
     clearInterval(state.adminTimer);
     clearInterval(state.notificationTimer);
+    if (reportError) throw error;
     return null;
   }
 }
@@ -716,7 +717,10 @@ async function bindAdminActions() {
       if (!client) throw new Error('Firebase 웹 설정이 필요합니다.');
       await client.emailLogin(String(data.get('email') || ''), String(data.get('password') || ''));
       adminLoginForm.reset();
-      if (!await verifyAuthSession()) throw new Error('관리자 권한을 확인하지 못했습니다.');
+      const user = await verifyAuthSession({ reportError: true });
+      if (user?.role !== 'admin') {
+        throw Object.assign(new Error('관리자 권한이 등록되지 않은 계정입니다.'), { code: 'FORBIDDEN' });
+      }
     } catch (error) {
       adminLoginStatus.textContent = authErrorMessage(error);
     } finally {
@@ -804,7 +808,12 @@ document.addEventListener('click', (event) => {
         if (!client) throw new Error('Firebase 웹 설정이 필요합니다.');
         return client.googleLogin();
       })
-      .then(verifyAuthSession)
+      .then(() => verifyAuthSession({ reportError: true }))
+      .then((user) => {
+        if (action === 'admin-google-login' && user?.role !== 'admin') {
+          throw Object.assign(new Error('관리자 권한이 등록되지 않은 계정입니다.'), { code: 'FORBIDDEN' });
+        }
+      })
       .catch((error) => { status.textContent = authErrorMessage(error); });
   }
   if (action === 'close-login') closeModal(adminLoginModal);
