@@ -106,20 +106,35 @@ button:focus-visible { outline: 2px solid var(--ink); outline-offset: 4px; }
   align-items: center;
   min-height: 62px;
   padding: 8px var(--page-gutter);
-  background: var(--pink);
+  background: var(--portfolio-bg, #fff);
+  border-bottom: 1px solid var(--pink);
+  box-shadow: 0 3px 3.5px rgba(0, 0, 0, .08);
 }
 .logo-button { display: inline-flex; align-items: center; padding: 0; }
-.logo-button img { display: block; width: clamp(74px, 7vw, 100px); height: auto; }
+.logo-button img { display: block; width: 80px; height: 40px; object-fit: cover; }
 .gnb nav { display: flex; align-items: center; gap: clamp(18px, 3vw, 46px); }
 .gnb nav button {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  padding: 8px 0;
-  font-size: clamp(.75rem, 1vw, .95rem);
-  font-weight: 800;
+  gap: 6px;
+  padding: 4px 0;
+  color: var(--portfolio-text, #333);
+  font-size: 15px;
+  font-weight: 700;
+  line-height: 22.8px;
+  white-space: nowrap;
 }
-.gnb nav button i { font-size: .75em; }
+.gnb-nav-caret {
+  display: inline-grid;
+  width: 20px;
+  height: 20px;
+  place-items: center;
+  border: 1px solid #333;
+  border-radius: 999px;
+  background: #fff;
+  box-shadow: 1px 2px 0 #000;
+}
+.gnb-nav-caret .bi { font-size: 11px; line-height: 1; }
 .view-more .bi, .top-button .bi { font-size: .9em; }
 .project-thumb-media .bi { font-size: 1.8rem; }
 
@@ -798,21 +813,25 @@ body {
   margin-left: auto;
 }
 .gnb-tool {
+  display: inline-grid;
   min-height: 34px;
-  padding: 6px 12px;
-  border: 1px solid transparent;
+  place-items: center;
+  padding: 7px 12px;
+  border: 1px solid var(--portfolio-border);
   border-radius: 999px;
-  color: var(--ink);
+  color: var(--portfolio-text, #333);
+  background: var(--portfolio-bg, #fff);
   font-size: .74rem;
   font-weight: 800;
 }
+.gnb-theme-tool { min-width: 40px; padding: 10px 14px; }
+.gnb-theme-tool .bi { font-size: 12px; }
+.gnb-admin-tool { min-width: 42px; }
+.gnb-admin-tool .bi { font-size: 18px; }
 .gnb-tool:hover,
 .gnb-tool:focus-visible {
   border-color: var(--portfolio-primary);
   color: var(--portfolio-primary);
-}
-.gnb-admin-tool {
-  border-color: var(--portfolio-border);
 }
 .content-section {
   width: 100%;
