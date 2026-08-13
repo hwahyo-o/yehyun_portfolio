@@ -56,6 +56,8 @@ jobs:
           grep -q 'top: 366px' styles.css
           grep -q 'width: 15px' styles.css
           grep -q 'width: 35px' styles.css
+          grep -q 'background: #FAF7E9' styles.css
+          grep -q 'translateX(calc(-50% + 20px))' styles.css
           grep -q 'drop-shadow(-5px 5px 0 rgba(0, 0, 0, 1))' styles.css
           grep -q 'drop-shadow(5px 5px 0 rgba(0, 0, 0, 1))' styles.css
           grep -q 'drop-shadow(-5px -5px 0 rgba(0, 0, 0, 1))' styles.css

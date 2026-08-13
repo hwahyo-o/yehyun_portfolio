@@ -1541,3 +1541,16 @@ Drive OAuth는 Google consent 화면과 authorization code 반환까지 성공�
 - 실패 시 Gallery Pagination CSS·CI 범위에서만 최소 재수정한다.
 
 - CI 실행 추적: 버튼 폭과 CI 검증 파일을 포함한 최신 브랜치 커밋에서 PR 검증을 재실행한다.
+
+
+---
+
+## 2026-08-13 Gallery Title 수평 위치 및 배경색 보정
+
+- `gallery-title.png` 컨테이너를 기존 중앙 기준에서 오른쪽 20px 이동한다.
+- `.gallery-hero` 배경색을 `#FAF7E9`로 변경한다.
+- 범위: Gallery Hero CSS와 이를 확인하는 CI, 계획 문서에 한정한다.
+- Gate: title 위치 보정은 데스크톱 기준 20px이며, 배경색이 정확히 `#FAF7E9`여야 한다. Swiper·페이지네이션·코너 프레임 동작은 변경하지 않는다.
+- 검증: 정적 CI와 GitHub Pages 배포 성공. 실패하면 이 CSS·CI 범위에서만 재수정한다.
+
+- CI 실행 추적: title 위치·background·CI 검증 파일을 포함한 최신 브랜치 커밋에서 PR 검증을 재실행한다.
