@@ -252,3 +252,8 @@ The Worker uses the same OAuth client for two distinct operations. The configure
 - The first **지금 수동 백업** creates the date subfolder and JSON backup file. “Drive connected” therefore means the root backup folder is ready; it does not claim that a backup file exists yet.
 
 A second, unused Google Cloud project must be deleted only in the Google Cloud Console after confirming that it has no unrelated APIs, OAuth clients, service accounts, Firebase resources, billing links, or other workloads. Never delete the project whose OAuth Client ID is configured in the Worker.
+
+
+## Drive-backed post source assets
+
+A Drive connection is ready only after the Worker verifies and stores the private ID of the visible Portfolio-con root folder. Every new post is stored below Portfolio-con/YYYY-MM-DD/title-slug and includes index.html, style.css, script.js, and the uploaded original images/videos. D1 keeps Drive file IDs and the Worker streams those files to public posts; Drive tokens and direct Drive URLs never reach the browser. The provider-link callback maps Firebase account conflicts, reauthentication, provider configuration, OAuth denial, redirect mismatch, folder preparation, and upload failures to safe status messages.

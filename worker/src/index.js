@@ -289,9 +289,10 @@ function validateMediaFiles(files) {
 
 async function uploadDrivePostAssets(env, postId, title, iso, input, mediaFiles) {
   const token = await getDriveAccessToken(env);
-  const rootId = await getOrCreateDriveFolder(token, 'Portfolio-con');
-  const dateId = await getOrCreateDriveFolder(token, kstDateFolder(iso), rootId);
-  const postIdFolder = await getOrCreateDriveFolder(token, slugify(title) + '-' + postId.slice(0, 8), dateId);
+  const root = await env.DB.prepare('SELECT drive_folder_id FROM drive_storage_roots WHERE id = ?').bind('primary').first();
+  if (!root?.drive_folder_id) throw httpError('DRIVE_NOT_READY', 'Google Drive 백업 폴더를 먼저 준비해주세요.', 409);
+  const dateId = await getOrCreateDriveFolder(token, kstDateFolder(iso), root.drive_folder_id);
+  const postIdFolder = await getOrCreateDriveFolder(token, slugify(title), dateId);
   const originals = [
     { fileName: 'index.html', mimeType: 'text/html; charset=utf-8', bytes: new TextEncoder().encode(input.html) },
     { fileName: 'style.css', mimeType: 'text/css; charset=utf-8', bytes: new TextEncoder().encode(input.css) },
@@ -556,6 +557,8 @@ async function finishGoogleDriveOAuth(request, env) {
   const url = new URL(request.url);
   const state = url.searchParams.get('state') || '';
   const code = url.searchParams.get('code') || '';
+  const providerError = url.searchParams.get('error') || '';
+  if (providerError) return oauthRedirect(env, driveOAuthErrorFragment(providerError));
   if (!state || !code) return oauthRedirect(env, 'admin-drive-error');
   const stateRow = await env.DB.prepare('SELECT state, uid, created_at FROM google_oauth_states WHERE state = ?').bind(state).first();
   if (!stateRow || Date.now() - Date.parse(stateRow.created_at) > 10 * 60 * 1000) return oauthRedirect(env, 'admin-drive-expired');
@@ -571,7 +574,10 @@ async function finishGoogleDriveOAuth(request, env) {
       redirect_uri: env.GOOGLE_REDIRECT_URI || '',
     }),
   });
-  if (!tokenResponse.ok) return oauthRedirect(env, 'admin-drive-token-error');
+  if (!tokenResponse.ok) {
+    const failure = await tokenResponse.json().catch(() => ({}));
+    return oauthRedirect(env, driveOAuthErrorFragment(failure.error));
+  }
   const token = await tokenResponse.json();
   if (!token.refresh_token || !env.GOOGLE_TOKEN_ENCRYPTION_KEY) return oauthRedirect(env, 'admin-drive-secret-error');
   const encrypted = await encryptSecret(token.refresh_token, env.GOOGLE_TOKEN_ENCRYPTION_KEY);
@@ -585,8 +591,13 @@ async function finishGoogleDriveOAuth(request, env) {
     const accessToken = await getDriveAccessToken(env);
     const rootId = await getOrCreateDriveFolder(accessToken, 'Portfolio-con');
     await getOrCreateDriveFolder(accessToken, 'Backups', rootId);
+    await env.DB.prepare('INSERT INTO drive_storage_roots (id, drive_folder_id, verified_at) VALUES (?, ?, ?) ON CONFLICT(id) DO UPDATE SET drive_folder_id = excluded.drive_folder_id, verified_at = excluded.verified_at')
+      .bind('primary', rootId, new Date().toISOString()).run();
   } catch (error) {
-    await env.DB.prepare('DELETE FROM google_drive_connections WHERE id = ?').bind('primary').run();
+    await env.DB.batch([
+      env.DB.prepare('DELETE FROM google_drive_connections WHERE id = ?').bind('primary'),
+      env.DB.prepare('DELETE FROM drive_storage_roots WHERE id = ?').bind('primary'),
+    ]);
     return oauthRedirect(env, driveErrorFragment(error.code));
   }
   return oauthRedirect(env, 'admin-drive-connected');
@@ -602,6 +613,21 @@ function driveErrorFragment(code) {
     SECRET_CONFIG_INVALID: 'admin-drive-secret-error',
   };
   return fragments[code] || 'admin-drive-error';
+}
+
+function driveOAuthErrorFragment(code) {
+  if (code === 'access_denied') return 'admin-drive-access-denied';
+  if (code === 'redirect_uri_mismatch') return 'admin-drive-redirect-error';
+  if (code === 'invalid_grant') return 'admin-drive-expired';
+  return 'admin-drive-token-error';
+}
+
+function googleLinkErrorFragment(reason) {
+  if (reason.includes('FEDERATED_USER_ID_ALREADY_LINKED') || reason.includes('EMAIL_EXISTS')) return 'admin-google-link-in-use';
+  if (reason.includes('CREDENTIAL_TOO_OLD_LOGIN_AGAIN') || reason.includes('INVALID_ID_TOKEN')) return 'admin-google-link-relogin';
+  if (reason.includes('OPERATION_NOT_ALLOWED') || reason.includes('INVALID_PROVIDER_ID')) return 'admin-google-link-provider-disabled';
+  if (reason.includes('INVALID_IDP_RESPONSE') || reason.includes('INVALID_PENDING_TOKEN')) return 'admin-google-link-oauth-error';
+  return 'admin-google-link-error';
 }
 
 function firebaseRequestUri(env) {
@@ -652,7 +678,8 @@ async function decryptSecret(ciphertext, iv, encodedKey) {
 
 async function getDriveStatus(env) {
   const connection = await env.DB.prepare('SELECT google_subject, updated_at FROM google_drive_connections WHERE id = ?').bind('primary').first();
-  return json({ connected: Boolean(connection), updatedAt: connection?.updated_at || null });
+  const root = await env.DB.prepare('SELECT verified_at FROM drive_storage_roots WHERE id = ?').bind('primary').first();
+  return json({ connected: Boolean(connection && root), ready: Boolean(root), updatedAt: connection?.updated_at || null, verifiedAt: root?.verified_at || null });
 }
 
 async function disconnectDrive(env) {
@@ -1109,9 +1136,7 @@ async function finishFirebaseGoogleLink(request, env, stateRow, code) {
     if (!response.ok) {
       const payload = await response.json().catch(() => ({}));
       const reason = String(payload.error?.message || '');
-      if (reason.includes('FEDERATED_USER_ID_ALREADY_LINKED') || reason.includes('EMAIL_EXISTS')) return oauthRedirect(env, 'admin-google-link-in-use');
-      if (reason.includes('OPERATION_NOT_ALLOWED') || reason.includes('INVALID_PROVIDER_ID')) return oauthRedirect(env, 'admin-google-login-provider-disabled');
-      return oauthRedirect(env, 'admin-google-link-error');
+      return oauthRedirect(env, googleLinkErrorFragment(reason));
     }
     const payload = await response.json();
     if (!payload.idToken || !payload.refreshToken || payload.localId !== stateRow.uid) return oauthRedirect(env, 'admin-google-link-error');

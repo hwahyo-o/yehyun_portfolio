@@ -44,6 +44,7 @@ jobs:
           test -f worker/schema/007_member_guestbook.sql
           test -f worker/schema/008_firebase_google_link.sql
           test -f worker/schema/009_bearer_auth_sessions.sql
+          test -f worker/schema/010_drive_storage_root.sql
           grep -q '/api/auth/google/start' worker/src/index.js
           grep -q '/api/auth/google/link/start' worker/src/index.js
           grep -q '/api/auth/ticket' worker/src/index.js
@@ -54,6 +55,8 @@ jobs:
           grep -q 'accounts:update' worker/src/index.js
           grep -q "stateRow.session_id" worker/src/index.js
           grep -q "getOrCreateDriveFolder(accessToken, 'Backups', rootId)" worker/src/index.js
+          grep -q 'drive_storage_roots' worker/src/index.js
+          grep -q 'googleLinkErrorFragment' worker/src/index.js
           grep -q "admin-drive-folder-create-error" app.js
           grep -q 'activity_events' worker/src/index.js
           grep -Fq 'crons = ["0 11 * * *"]' worker/wrangler.toml
