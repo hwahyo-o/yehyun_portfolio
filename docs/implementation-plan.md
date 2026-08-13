@@ -1404,6 +1404,6 @@ Drive OAuth는 Google consent 화면과 authorization code 반환까지 성공�
 
 ### 협업 인계
 
-- 예상 변경 파일: `index.html`, `styles.css`, `app.js`, 본 문서.
+- 예상 변경 파일: `index.html`, `styles.css`, `app.js`, `.github/workflows/verify.yml`, 본 문서.
 - 기대하는 런타임 의존성: Swiper browser bundle 1개와 stylesheet 1개. 별도 빌드 도구·서버·DB 마이그레이션은 추가하지 않는다.
 - 롤백은 해당 갤러리 변경 커밋을 되돌리면 가능하며, 데이터·외부 서비스 상태를 변경하지 않는다.
