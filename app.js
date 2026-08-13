@@ -210,25 +210,16 @@ function initTheme() {
   applyTheme(saved || 'light');
 }
 
-const AUTH_TOKEN_KEY = 'portfolio-auth-session';
-
-function readAuthToken() {
-  return window.sessionStorage.getItem(AUTH_TOKEN_KEY) || '';
-}
-
-function storeAuthSession(payload) {
-  if (!payload?.sessionToken) throw new Error('로그인 세션을 발급하지 못했습니다.');
-  window.sessionStorage.setItem(AUTH_TOKEN_KEY, payload.sessionToken);
-}
-
-function clearAuthSession() {
-  window.sessionStorage.removeItem(AUTH_TOKEN_KEY);
+async function firebaseClient() {
+  return window.portfolioFirebaseReady || null;
 }
 
 async function authHeaders() {
-  const token = readAuthToken();
+  const client = await firebaseClient();
+  const token = await client?.token();
   return { 'X-Portfolio-Request': 'portfolio-app', ...(token ? { Authorization: 'Bearer ' + token } : {}) };
 }
+
 
 const authErrorMessages = {
   AUTH_NOT_CONFIGURED: '로그인 서버 설정이 완료되지 않았습니다. 운영 설정을 확인해주세요.',
@@ -607,6 +598,8 @@ function startAdminScheduler() {
 
 async function verifyAuthSession() {
   try {
+    const client = await firebaseClient();
+    if (!client) throw new Error('FIREBASE_WEB_CONFIG_MISSING');
     const payload = await apiRequest('/api/auth/session');
     const user = payload.user || null;
     setUserUi(user);
@@ -632,7 +625,9 @@ async function verifyAuthSession() {
 }
 
 async function setupAuthSession() {
-  if (!apiBase) return;
+  const client = await firebaseClient();
+  if (!client || !apiBase) return;
+  client.observe(() => verifyAuthSession());
   await verifyAuthSession();
 }
 
@@ -675,71 +670,7 @@ function bindAdminPasswordActions() {
   });
 }
 
-async function handleGoogleLoginCallback() {
-  const result = window.location.hash.slice(1);
-  const ticket = new URLSearchParams(result).get('auth-ticket');
-  if (ticket) {
-    window.history.replaceState(null, '', window.location.pathname + window.location.search);
-    try {
-      const payload = await apiRequest('/api/auth/ticket', { method: 'POST', body: JSON.stringify({ ticket }) });
-      storeAuthSession(payload);
-      const user = await verifyAuthSession();
-      if (!user) throw new Error('로그인 세션을 확인하지 못했습니다.');
-      return;
-    } catch (error) {
-      clearAuthSession();
-      memberLoginStatus.textContent = authErrorMessage(error);
-      openModal(memberLoginModal);
-      return;
-    }
-  }
-
-  const messages = {
-    'admin-google-login-forbidden': 'Google 계정이 관리자 권한으로 등록되지 않았습니다.',
-    'admin-google-login-expired': 'Google 로그인 요청이 만료되었습니다. 다시 시도해주세요.',
-    'admin-google-login-link-required': '기존 Firebase 이메일 계정과 Google 계정 연결이 필요합니다.',
-    'admin-google-link-success': 'Google 계정 연결이 완료되었습니다. 다음부터 Google 로그인으로 관리자 모드에 접속할 수 있습니다.',
-    'admin-google-link-expired': 'Google 계정 연결 요청이 만료되었습니다. 이메일/비밀번호로 다시 로그인한 뒤 재시도해주세요.',
-    'admin-google-link-forbidden': '현재 관리자 세션으로 Google 계정을 연결할 권한이 없습니다.',
-    'admin-google-link-in-use': '이 Google 계정은 다른 Firebase 사용자에 이미 연결되어 있습니다.',
-    'admin-google-link-oauth-error': 'Google 인증 교환에 실패했습니다. Redirect URI와 OAuth Client 설정을 확인해주세요.',
-    'admin-google-link-provider-disabled': 'Firebase Google Provider가 비활성화되어 있습니다.',
-    'admin-google-link-timeout': 'Google 인증 서버 응답 시간이 초과되었습니다. 잠시 후 다시 시도해주세요.',
-    'admin-google-link-error': 'Google 계정 연결에 실패했습니다. 다시 시도해주세요.',
-    'admin-google-link-relogin': 'Firebase 관리자 세션을 다시 확인해야 합니다. 이메일/비밀번호로 다시 로그인한 뒤 시도해주세요.',
-    'admin-google-link-provider-disabled': 'Firebase Google Provider가 비활성화되어 있습니다.',
-    'admin-drive-connected': 'Google Drive가 연결되고 백업 폴더가 준비되었습니다. 이제 수동 백업을 실행할 수 있습니다.',
-    'admin-drive-expired': 'Google Drive 연결 요청이 만료되었습니다. 다시 시도해주세요.',
-    'admin-drive-token-error': 'Google Drive 인증 교환에 실패했습니다. OAuth redirect 설정을 확인해주세요.',
-    'admin-drive-secret-error': 'Google Drive 서버 보안 설정을 확인해주세요.',
-    'admin-drive-auth-error': 'Google Drive 권한을 갱신하지 못했습니다. 다시 연결해주세요.',
-    'admin-drive-folder-read-error': 'Google Drive 백업 폴더를 확인하지 못했습니다. Drive API와 권한을 확인해주세요.',
-    'admin-drive-folder-create-error': 'Google Drive 백업 폴더를 만들지 못했습니다. Drive 권한을 다시 승인해주세요.',
-    'admin-drive-timeout': 'Google Drive 응답 시간이 초과되었습니다. 다시 시도해주세요.',
-    'admin-drive-error': 'Google Drive 연결을 완료하지 못했습니다. 다시 시도해주세요.',
-    'admin-drive-access-denied': 'Google Drive 권한 승인이 취소되었거나 테스트 사용자 권한이 없습니다.',
-    'admin-drive-redirect-error': 'Google Drive OAuth redirect URI 설정이 일치하지 않습니다.',
-    'admin-google-login-oauth-error': 'Google OAuth 교환에 실패했습니다. Redirect URI와 OAuth Client 설정을 확인해주세요.',
-    'admin-google-login-provider-error': 'Firebase Google 인증에 실패했습니다. Google Provider 설정을 확인해주세요.',
-    'admin-google-login-provider-disabled': 'Firebase Google Provider가 비활성화되어 있습니다.',
-    'admin-google-login-not-configured': 'Google 로그인 서버 설정이 완료되지 않았습니다.',
-    'admin-google-login-certificates-error': 'Firebase 인증서를 확인할 수 없습니다. 잠시 후 다시 시도해주세요.',
-    'admin-google-login-token-error': 'Google 인증 토큰을 확인할 수 없습니다. 다시 시도해주세요.',
-    'admin-google-login-timeout': 'Google 인증 서버 응답 시간이 초과되었습니다. 잠시 후 다시 시도해주세요.',
-    'admin-google-login-secret-error': '서버 보안 설정이 올바르지 않습니다. 운영 설정을 확인해주세요.',
-    'admin-google-login-session-error': '로그인 세션을 저장하지 못했습니다. 잠시 후 다시 시도해주세요.',
-    'admin-google-login-error': 'Google 로그인에 실패했습니다. 설정을 확인해주세요.',
-  };
-  if (!messages[result]) return;
-  const isLinkResult = result.startsWith('admin-google-link-');
-  const isDriveResult = result.startsWith('admin-drive-');
-  const status = isLinkResult ? googleLinkStatus : isDriveResult ? driveConnectionStatus : result.startsWith('admin-') ? adminLoginStatus : memberLoginStatus;
-  status.textContent = messages[result];
-  if (isLinkResult || isDriveResult) openModal(settingsModal);
-  else openModal(result.startsWith('admin-') ? adminLoginModal : memberLoginModal);
-  window.history.replaceState(null, '', window.location.pathname + window.location.search);
-}
-
+async 
 function bindAdminActions() {
   adminPostForm?.addEventListener('submit', async (event) => {
     event.preventDefault();
@@ -768,16 +699,11 @@ function bindAdminActions() {
     adminLoginStatus.textContent = '로그인 중…';
     const data = new FormData(adminLoginForm);
     try {
-      const payload = await apiRequest('/api/auth/login', {
-        method: 'POST',
-        body: JSON.stringify({
-          email: String(data.get('email') || ''),
-          password: String(data.get('password') || ''),
-        }),
-      });
-      storeAuthSession(payload);
+      const client = await firebaseClient();
+      if (!client) throw new Error('Firebase 웹 설정이 필요합니다.');
+      await client.emailLogin(String(data.get('email') || ''), String(data.get('password') || ''));
       adminLoginForm.reset();
-      if (!await verifyAuthSession()) throw new Error('로그인 세션을 확인하지 못했습니다. 다시 시도해주세요.');
+      if (!await verifyAuthSession()) throw new Error('관리자 권한을 확인하지 못했습니다.');
     } catch (error) {
       adminLoginStatus.textContent = authErrorMessage(error);
     } finally {
@@ -859,11 +785,14 @@ document.addEventListener('click', (event) => {
   if (action === 'admin-login') openModal(adminLoginModal);
   if (action === 'admin-google-login' || action === 'member-google-login') {
     const status = action === 'admin-google-login' ? adminLoginStatus : memberLoginStatus;
-    if (!apiBase) status.textContent = '로그인 서버가 설정되지 않았습니다.';
-    else {
-      status.textContent = 'Google 로그인으로 이동 중…';
-      window.location.assign(apiBase + '/api/auth/google/start');
-    }
+    status.textContent = 'Google 로그인 중…';
+    firebaseClient()
+      .then((client) => {
+        if (!client) throw new Error('Firebase 웹 설정이 필요합니다.');
+        return client.googleLogin();
+      })
+      .then(verifyAuthSession)
+      .catch((error) => { status.textContent = authErrorMessage(error); });
   }
   if (action === 'close-login') closeModal(adminLoginModal);
   if (action === 'close-member-login') closeModal(memberLoginModal);
@@ -883,13 +812,11 @@ document.addEventListener('click', (event) => {
   }
   if (action === 'close-notifications') notificationCenter.hidden = true;
   if (action === 'admin-logout') {
-    apiRequest('/api/auth/logout', { method: 'POST' })
-      .finally(() => {
-        clearAuthSession();
-        setUserUi(null);
-        clearInterval(state.adminTimer);
-        clearInterval(state.notificationTimer);
-      });
+    firebaseClient().then((client) => client?.logout()).finally(() => {
+      setUserUi(null);
+      clearInterval(state.adminTimer);
+      clearInterval(state.notificationTimer);
+    });
   }
   if (action === 'backup-now') createBackup('manual');
   if (action === 'drive-connect') {
@@ -931,16 +858,15 @@ googleLinkForm?.addEventListener('submit', async (event) => {
   event.preventDefault();
   if (!state.isAdmin) return;
   const form = new FormData(googleLinkForm);
-  googleLinkStatus.textContent = 'Google 계정 선택 화면으로 이동 중…';
+  googleLinkStatus.textContent = 'Google 계정을 연결하는 중…';
   try {
-    const payload = await apiRequest('/api/admin/google/link/start', {
-      method: 'POST',
-      body: JSON.stringify({ email: form.get('email'), password: form.get('password') }),
-    });
+    const client = await firebaseClient();
+    if (!client) throw new Error('Firebase 웹 설정이 필요합니다.');
+    await client.linkGoogle(String(form.get('email') || ''), String(form.get('password') || ''));
     googleLinkForm.reset();
-    window.location.assign(payload.authorizationUrl);
+    googleLinkStatus.textContent = 'Google 계정 연결이 완료되었습니다.';
   } catch (error) {
-    googleLinkStatus.textContent = error.message;
+    googleLinkStatus.textContent = authErrorMessage(error);
   }
 });
 
@@ -951,7 +877,6 @@ window.addEventListener('load', resetScroll);
 
 updatePage();
 initTheme();
-handleGoogleLoginCallback();
 bindNameShuffle();
 bindCommunityActions();
 bindAdminPasswordActions();
