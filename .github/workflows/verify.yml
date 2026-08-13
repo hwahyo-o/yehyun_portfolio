@@ -32,7 +32,13 @@ jobs:
           grep -q 'bootstrap@5.3.8/dist/css/bootstrap.min.css' index.html
           grep -q 'bootstrap-icons@1.13.1/font/bootstrap-icons.min.css' index.html
           grep -q 'class="gnb-nav-caret"' index.html
-          grep -q 'bi bi-caret-down-fill' index.html
+          grep -q 'bi bi-arrow-right-short' index.html
+          ! grep -q 'bi bi-caret-down-fill' index.html
+          grep -q 'bottom: 6px' styles.css
+          grep -q 'left: 38%' styles.css
+          grep -q 'margin-left: 0' styles.css
+          grep -q 'color: #6796FF' styles.css
+          grep -q 'box-shadow: 1px 2px 0 #0B5ED7' styles.css
           grep -q 'bi bi-lock-fill' index.html
           grep -q 'border-bottom: 1px solid var(--pink)' styles.css
           grep -q 'box-shadow: 1px 2px 0 #000' styles.css
