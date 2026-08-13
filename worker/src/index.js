@@ -22,7 +22,7 @@ async function route(request, env, ctx, visitorId) {
   try {
     if (url.pathname === '/health') return json({ ok: true, service: 'yehyun-portfolio-api' });
     if (url.pathname === '/api/auth/session' && request.method === 'GET') {
-      const user = await optionalUser(request, env);
+      const user = getBearer(request) ? await requireUser(request, env) : null;
       return json({ user: user && { uid: user.claims.sub, role: user.role } });
     }
     if (url.pathname === '/api/admin/drive/start' && request.method === 'GET') return startGoogleDriveOAuth(request, env);
@@ -1006,7 +1006,18 @@ async function verifyFirebaseToken(token, env) {
     },
   );
   if (!response.ok) {
-    throw httpError('AUTH_TOKEN_VERIFY_FAILED', '로그인 토큰을 확인할 수 없습니다.', 401);
+    const failure = await response.json().catch(() => ({}));
+    const code = firebaseAuthErrorCode(failure);
+    if (code === 'AUTH_NOT_CONFIGURED') {
+      throw httpError('AUTH_NOT_CONFIGURED', 'Firebase 인증 서버 설정을 확인해주세요.', 503);
+    }
+    if (code === 'AUTH_PROVIDER_DISABLED') {
+      throw httpError('AUTH_PROVIDER_DISABLED', 'Firebase Authentication 제공자 설정을 확인해주세요.', 503);
+    }
+    if (code === 'AUTH_FAILED') {
+      throw httpError('AUTH_TOKEN_VERIFY_FAILED', '로그인 토큰을 확인할 수 없습니다. 다시 로그인해주세요.', 401);
+    }
+    throw httpError('AUTH_SERVICE_ERROR', 'Firebase 인증 서비스를 확인할 수 없습니다. 잠시 후 다시 시도해주세요.', 502);
   }
   const payload = await response.json().catch(() => ({}));
   const user = payload.users?.[0];
