@@ -1250,3 +1250,34 @@ Firebase config가 누락되면 UI는 로그인 요청을 보내지 않고 설�
 - CSP 오류는 콘솔의 차단 origin만 확인해 최소 allow-list로 수정한다.
 - Firebase 오류는 config, Authorized domains, provider 설정 중 발생 계층만 점검한다.
 - 정적 검증에는 app module 검사, CSP origin 검사, 로딩 해제 핸들러 존재 검사를 포함한다. 브라우저 검증은 CI 성공과 별도로 기록한다.
+
+
+## 45. 2026-08-13 Firebase 역할 판정 오류 전달 및 Google 팝업 CSP 수정
+
+### 관찰과 원인
+
+- Google 관리자 로그인 시 Firebase가 불러오는 `https://apis.google.com/js/api.js`가 script-src에 없어, OAuth popup 시작 전에 CSP가 차단되고 auth/internal-error로 축소된다.
+- 이메일 로그인 뒤 `/api/auth/session`은 Bearer token 오류를 optionalUser가 user:null으로 변환한다. 화면도 역할 확인 예외를 일반 실패 문구로 덮어 Worker Secret·토큰 검증·D1 역할 오류를 구분할 수 없다.
+
+### 계층별 수정 범위
+
+- 화면: 관리자 로그인에서 Firebase 인증 완료 뒤의 안전한 Worker 오류를 표시한다. 관리자 권한이 없는 Firebase 사용자는 명시적으로 권한 미등록 메시지를 본다.
+- 처리: auth session endpoint는 Bearer가 없을 때만 guest user:null을 반환하고, 전달된 invalid token/Worker 오류는 error envelope로 유지한다.
+- 핵심 규칙: Google 또는 이메일 인증 성공과 D1 관리자 역할은 별개다. 관리자 모달은 admin role일 때만 성공으로 처리한다.
+- 저장·외부 서비스: CSP script-src에 apis.google.com만 추가한다. Worker Secret 값·UID·token은 응답·문서·로그에 기록하지 않는다.
+- 의존성·시작: Firebase popup의 기존 gstatic 허용은 유지하며 신규 wildcard CSP는 추가하지 않는다.
+
+### Process Phase와 Gate
+
+1. 문서 선커밋. Gate: 원인·수정 범위·실패 Loop가 구현 전 존재한다.
+2. CSP 수정. Gate: script-src의 신규 origin은 apis.google.com 하나뿐이다.
+3. Worker 오류 경계. Gate: Bearer 없는 session은 guest, 잘못된/검증 불가 Bearer는 401/503 error envelope다.
+4. 화면 역할 판정. Gate: 이메일·Google 관리자 로그인은 admin role이 아니면 FORBIDDEN을 표시하며 화면이 로그인 성공으로 오인하지 않는다.
+5. 검증·배포. Gate: module syntax, CSP, auth session contract, Worker dry-run이 PR에서 통과한다.
+
+### 실패 시 재수정 Loop 및 검증
+
+- CSP가 남으면 DevTools의 차단 resource origin만 확인해 필요한 한 origin만 추가한다.
+- Firebase token 확인이 실패하면 Cloudflare의 FIREBASE_WEB_API_KEY 존재·동일 Firebase project 여부만 확인한다.
+- D1 권한이 실패하면 Firebase Console의 실제 사용자 UID와 admin_roles의 UID 일치만 확인한다. 사용자를 삭제하거나 UID·Secret을 공개하지 않는다.
+- 배포 후 운영 검증은 이메일 관리자 로그인, Google popup 로그인, 관리자 미등록 Google Member 로그인 순으로 분리한다.

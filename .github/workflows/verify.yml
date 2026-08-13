@@ -2,7 +2,7 @@ name: Verify static portfolio
 
 on:
   push:
-    branches: [drill, drill-oauth-rebuild, drill-oauth-token-fix, drill-auth-rebuild, drill-auth-rebuild-fix, drill-firebase-auth, drill-loading-fix]
+    branches: [drill, drill-oauth-rebuild, drill-oauth-token-fix, drill-auth-rebuild, drill-auth-rebuild-fix, drill-firebase-auth, drill-loading-fix, drill-auth-feedback]
   pull_request:
     branches: [main]
 
@@ -36,7 +36,9 @@ jobs:
           grep -q "import('./firebase-auth.js')" app.js
           ! grep -x 'async' app.js
           grep -q 'portfolio_start_failed' app.js
-          grep -q 'https://www.gstatic.com' index.html
+          grep -q "script-src 'self' https://www.gstatic.com https://apis.google.com" index.html
+          grep -q "getBearer(request) ? await requireUser(request, env) : null" worker/src/index.js
+          grep -q "verifyAuthSession({ reportError: true })" app.js
           grep -q 'signInWithEmailAndPassword' firebase-auth.js
           grep -q 'signInWithPopup' firebase-auth.js
           grep -q 'linkWithPopup' firebase-auth.js
