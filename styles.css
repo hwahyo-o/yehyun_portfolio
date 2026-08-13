@@ -619,7 +619,7 @@ button:focus-visible { outline: 2px solid var(--ink); outline-offset: 4px; }
   min-height: 950px;
   padding: 0;
   overflow: hidden;
-  background: #f4efd2;
+  background: #FAF7E9;
 }
 .hero-frame {
   width: 100%;
@@ -689,7 +689,7 @@ button:focus-visible { outline: 2px solid var(--ink); outline-offset: 4px; }
   width: 630px;
   height: 200px;
   margin: 0;
-  transform: translateX(-50%);
+  transform: translateX(calc(-50% + 20px));
 }
 .gallery-title-decoration img { display: block; width: 100%; height: 100%; object-fit: contain; }
 .gallery-pagination {
