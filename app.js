@@ -245,7 +245,17 @@ const authErrorMessages = {
 };
 
 function authErrorMessage(error) {
-  return authErrorMessages[error?.code] || error?.message || '로그인 요청에 실패했습니다.';
+  const firebaseMessages = {
+    'auth/configuration-not-found': 'Firebase 웹 설정이 없습니다. 관리자에게 설정을 요청해주세요.',
+    'auth/invalid-credential': '이메일 또는 비밀번호를 확인해주세요.',
+    'auth/invalid-login-credentials': '이메일 또는 비밀번호를 확인해주세요.',
+    'auth/popup-closed-by-user': 'Google 로그인 창이 닫혔습니다. 다시 시도해주세요.',
+    'auth/popup-blocked': '브라우저가 Google 로그인 창을 차단했습니다. 팝업을 허용한 뒤 다시 시도해주세요.',
+    'auth/credential-already-in-use': '이 Google 계정은 다른 Firebase 사용자에 이미 연결되어 있습니다.',
+    'auth/account-exists-with-different-credential': '이 이메일은 다른 로그인 방식에 연결되어 있습니다.',
+    'auth/requires-recent-login': 'Google 계정을 연결하려면 이메일과 비밀번호를 다시 확인해주세요.',
+  };
+  return firebaseMessages[error?.code] || authErrorMessages[error?.code] || error?.message || '로그인 요청에 실패했습니다.';
 }
 
 async function recordActivity(action, entityId = null) {
