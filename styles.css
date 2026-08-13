@@ -675,16 +675,17 @@ button:focus-visible { outline: 2px solid var(--ink); outline-offset: 4px; }
   z-index: 4;
   width: 128px;
   height: 128px;
+  filter: drop-shadow(5px 5px 0 rgba(0, 0, 0, 1));
   pointer-events: none;
 }
-.gallery-corner-tl { top: 0; left: calc(50% - 552px); }
-.gallery-corner-tr { top: 0; right: calc(50% - 552px); transform: rotate(90deg); }
-.gallery-corner-bl { top: 580px; left: calc(50% - 552px); transform: rotate(-90deg); }
-.gallery-corner-br { top: 580px; right: calc(50% - 552px); transform: rotate(180deg); }
+.gallery-corner-tl { top: 0; left: calc(50% - 552px); transform: scaleX(-1); }
+.gallery-corner-tr { top: 0; right: calc(50% - 552px); }
+.gallery-corner-bl { top: 580px; left: calc(50% - 552px); transform: rotate(180deg); }
+.gallery-corner-br { top: 580px; right: calc(50% - 552px); transform: scaleY(-1); }
 .hero-frame .gallery-title-decoration {
   position: absolute;
   z-index: 5;
-  top: 643px;
+  top: 662px;
   left: 50%;
   width: 630px;
   height: 200px;
@@ -695,7 +696,7 @@ button:focus-visible { outline: 2px solid var(--ink); outline-offset: 4px; }
 .gallery-pagination {
   position: absolute;
   z-index: 6;
-  top: 539px;
+  top: 486px;
   left: 50%;
   display: flex;
   align-items: end;
@@ -723,7 +724,7 @@ button:focus-visible { outline: 2px solid var(--ink); outline-offset: 4px; }
   bottom: 11px;
   left: 50%;
   display: none;
-  width: 62px;
+  width: 32px;
   transform: translateX(-50%);
 }
 .gallery-pagination-button.is-active img { display: block; }
@@ -747,8 +748,8 @@ button:focus-visible { outline: 2px solid var(--ink); outline-offset: 4px; }
   .gallery-corner-tr { right: 11vw; }
   .gallery-corner-bl { top: 46vw; left: 11vw; }
   .gallery-corner-br { top: 46vw; right: 11vw; }
-  .hero-frame .gallery-title-decoration { top: 500px; width: min(62vw, 630px); height: auto; }
-  .gallery-pagination { top: 420px; }
+  .hero-frame .gallery-title-decoration { top: 519px; width: min(62vw, 630px); height: auto; }
+  .gallery-pagination { top: 358px; }
 }
 
 @media (max-width: 620px) {
@@ -767,8 +768,8 @@ button:focus-visible { outline: 2px solid var(--ink); outline-offset: 4px; }
   .gallery-corner-tr { right: 10vw; }
   .gallery-corner-bl { top: 49vw; left: 10vw; }
   .gallery-corner-br { top: 49vw; right: 10vw; }
-  .hero-frame .gallery-title-decoration { top: 390px; width: 82vw; }
-  .gallery-pagination { top: 315px; transform: translateX(-50%) scale(.75); }
+  .hero-frame .gallery-title-decoration { top: 402px; width: 82vw; }
+  .gallery-pagination { top: 254px; transform: translateX(-50%) scale(.75); }
 }
 
 

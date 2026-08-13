@@ -1455,3 +1455,30 @@ Drive OAuth는 Google consent 화면과 authorization code 반환까지 성공�
 - Figma 임시 자산 URL은 저장소 코드에 넣지 않는다. 커밋된 `public/` 원본만 참조한다.
 - API 키, 토큰, OAuth secret, 개인 식별값은 이 문서·커밋·검증 로그에 기록하지 않는다.
 - 예상 변경 파일: `docs/implementation-plan.md`, `index.html`, `styles.css`, `app.js`, `.github/workflows/verify.yml`, `public/gallery-*.png`.
+
+
+---
+
+## 2026-08-13 Gallery Hero 정렬·간격·재생 주기 보정
+
+### 수정 기준
+
+| 항목 | 확정값 |
+| --- | --- |
+| 좌상단 코너 | 원본의 좌우 반전 |
+| 우상단 코너 | 원본 |
+| 좌하단 코너 | 180° 회전 |
+| 우하단 코너 | 상하 반전 |
+| 코너 그림자 | `drop-shadow(5px 5px 0 rgba(0, 0, 0, 1))` |
+| active 장식 표시 폭 | 32px |
+| 데스크톱 타이틀·페이지네이션 간격 | 18px |
+| 태블릿·모바일 최소 간격 | 12px |
+| Swiper 자동재생 텀 | 1200ms |
+
+### Process Phase 및 Gate
+
+1. **문서 Gate**: 이 확정값과 반응형 최소 간격을 먼저 기록한다.
+2. **정렬 Gate**: 네 코너의 둥근 안쪽 곡선이 중앙 카드의 해당 모서리를 향하며, 이미지 밖으로 어긋나지 않는다.
+3. **간격 Gate**: active 장식은 원본 비율을 보존한 32px 폭이고, 페이지네이션과 title 이미지가 겹치지 않으며 데스크톱 18px·기타 12px 이상 분리된다.
+4. **동작 Gate**: 무한 루프와 상호작용 후 자동재생은 유지하며, 자동재생 간격은 1200ms다. reduced-motion에서는 자동재생하지 않는다.
+5. **검증 Gate**: 정적 CI·배포 검증을 통과하고, 실패하면 해당 Gate부터 최소 수정으로 재검증한다.
