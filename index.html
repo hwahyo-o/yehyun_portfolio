@@ -352,15 +352,21 @@
           <p class="section-label">Admin settings</p>
           <h2 id="settings-title">설정 및 백업</h2>
           <div class="settings-section">
-            <div class="settings-section-heading"><div><h3>Google 계정 및 Drive 연동</h3><p id="google-link-status">이메일/비밀번호 관리자 계정에 Google 로그인과 Drive 백업을 한 번에 연결합니다.</p></div><i class="bi bi-google" aria-hidden="true"></i></div>
-            <p id="drive-connection-status">연결 상태를 확인하는 중입니다.</p>
-            <form id="google-setup-form" class="admin-post-form">
+            <div class="settings-section-heading"><div><h3>Google 계정 연결</h3><p id="google-link-status">이메일/비밀번호 관리자 계정에 Google 로그인 방식을 연결합니다.</p></div><i class="bi bi-google" aria-hidden="true"></i></div>
+            <form id="google-link-form" class="admin-post-form">
               <label>관리자 이메일<input name="email" type="email" autocomplete="username" required></label>
               <label>관리자 비밀번호<input name="password" type="password" autocomplete="current-password" required></label>
-              <p class="modal-help">비밀번호는 Google 및 Drive 연동을 시작하기 위한 재확인에만 사용되며 저장되지 않습니다.</p>
-              <button class="btn btn-outline-dark rounded-pill" type="submit">Google 및 Drive 연결</button>
+              <p class="modal-help">비밀번호는 Google 로그인 연결을 시작하기 위한 재확인에만 사용되며 저장되지 않습니다.</p>
+              <button class="btn btn-outline-dark rounded-pill" type="submit">Google 계정 연결</button>
             </form>
-            <button class="btn btn-outline-danger rounded-pill" data-action="drive-disconnect" type="button">연결 끊기</button>
+          </div>
+          <div class="settings-section">
+            <div class="settings-section-heading"><div><h3>Google Drive 연결</h3><p id="drive-connection-status">연결 상태를 확인하는 중입니다.</p></div><i class="bi bi-cloud" aria-hidden="true"></i></div>
+            <p class="modal-help">Google 계정 연결 성공 뒤에 Drive 권한을 별도로 승인합니다. 성공하면 Portfolio-con 폴더가 준비됩니다.</p>
+            <div class="settings-actions">
+              <button class="btn btn-outline-dark rounded-pill" data-action="drive-connect" type="button">Google Drive 연결</button>
+              <button class="btn btn-outline-danger rounded-pill" data-action="drive-disconnect" type="button">연결 끊기</button>
+            </div>
           </div>
           <div class="settings-section">
             <div class="settings-section-heading"><div><h3>백업</h3><p>자동 백업은 관리자 화면이 열려 있고 브라우저가 활성 상태일 때만 동작합니다.</p></div><i class="bi bi-cloud-arrow-up" aria-hidden="true"></i></div>
