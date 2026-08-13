@@ -2,7 +2,7 @@ name: Verify static portfolio
 
 on:
   push:
-    branches: [drill, drill-oauth-rebuild, drill-oauth-token-fix]
+    branches: [drill, drill-oauth-rebuild, drill-oauth-token-fix, drill-auth-rebuild]
   pull_request:
     branches: [main]
 
@@ -47,7 +47,8 @@ jobs:
           test -f worker/schema/010_drive_storage_root.sql
           test -f worker/schema/011_admin_google_setup.sql
           grep -q '/api/auth/google/start' worker/src/index.js
-          grep -q '/api/admin/google/setup/start' worker/src/index.js
+          grep -q '/api/admin/google/link/start' worker/src/index.js
+          grep -q '/api/admin/drive/start' worker/src/index.js
           grep -q '/api/auth/ticket' worker/src/index.js
           grep -q 'auth_sessions' worker/src/index.js
           grep -q "SELECT uid, role, expires_at FROM auth_sessions" worker/src/index.js
@@ -59,12 +60,15 @@ jobs:
           grep -q 'function decodeBytes' worker/src/index.js
           grep -q 'googleSubjectFromIdToken' worker/src/index.js
           ! grep -q 'JSON.parse(decode(' worker/src/index.js
-          grep -q 'googleSetupAuthorizationUrl' worker/src/index.js
+          grep -q 'finishAdminGoogleLink' worker/src/index.js
+          grep -q 'googleLinkErrorFragment' worker/src/index.js
+          ! grep -q 'finishAdminGoogleSetup' worker/src/index.js
           grep -q "getOrCreateDriveFolder(accessToken, 'Backups', rootId)" worker/src/index.js
           grep -q 'drive_storage_roots' worker/src/index.js
           grep -q 'googleLinkErrorFragment' worker/src/index.js
-          grep -q "admin-google-setup-drive-folder-create-error" app.js
-          grep -q "google-setup-form" index.html
+          grep -q "google-link-form" app.js
+          grep -q "data-action=\"drive-connect\"" index.html
+          ! grep -q "google-setup-form\|admin-google-setup" app.js index.html
           grep -q 'activity_events' worker/src/index.js
           grep -Fq 'crons = ["0 11 * * *"]' worker/wrangler.toml
           grep -q '/oauth/google/login-callback' worker/src/index.js
