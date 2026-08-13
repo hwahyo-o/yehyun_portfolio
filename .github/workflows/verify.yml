@@ -51,13 +51,19 @@ jobs:
           grep -q 'gallery-pagination-active.png' index.html
           grep -q 'mail.google.com/mail/?view=cm&amp;fs=1&amp;to=ajas03974%40gmail.com' index.html
           grep -q 'target="_blank" rel="noopener noreferrer"' index.html
-          grep -q 'top: 620px' styles.css
-          grep -q 'top: 483px' styles.css
-          grep -q 'top: 366px' styles.css
+          grep -q 'top: 650px' styles.css
+          grep -q 'top: 513px' styles.css
+          grep -q 'top: 396px' styles.css
           grep -q 'width: 15px' styles.css
           grep -q 'width: 35px' styles.css
           grep -q 'background: #FAF7E9' styles.css
           grep -q 'translateX(calc(-50% + 20px))' styles.css
+          grep -q 'top: 650px' styles.css
+          grep -q 'top: 526px' styles.css
+          grep -q 'top: 513px' styles.css
+          grep -q 'top: 398px' styles.css
+          grep -q 'top: 396px' styles.css
+          grep -q 'top: 294px' styles.css
           grep -q 'drop-shadow(-5px 5px 0 rgba(0, 0, 0, 1))' styles.css
           grep -q 'drop-shadow(5px 5px 0 rgba(0, 0, 0, 1))' styles.css
           grep -q 'drop-shadow(-5px -5px 0 rgba(0, 0, 0, 1))' styles.css
