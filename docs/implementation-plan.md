@@ -921,3 +921,35 @@ Gate: 모든 CI 성공, 브라우저 console에 미해결 오류 없음, 실제 
 초기 페이지에서 관리자 쿠키가 전혀 없는 경우에는 인증 실패가 아니라 “로그인하지 않음” 상태다. 이 경우에 한해 `GET /api/auth/session`이 `{ user: null }`을 200으로 반환하도록 조정하고, 프런트는 user가 있을 때만 관리자 UI를 활성화한다. 쿠키가 있으나 만료·위조된 경우에는 기존 401을 유지하여 세션 검증 실패를 숨기지 않는다.
 
 Gate: no-cookie 초기 요청 200/null, 유효 관리자 세션 200/user, 잘못된 세션 401, 관리자 보호 API 비관리자 접근 401/403을 각각 정적 코드 검사와 배포 후 운영 요청으로 확인한다.
+
+
+## 32. 2026-08-13 Firebase 역할·Member 기능·방명록 재설계 승인 계획
+
+### 확정 정책
+
+- Guest는 공개 게시물·방명록을 열람하고 Contact 이메일 링크만 사용할 수 있다.
+- 공유, 반응, Contact DM, 방명록 작성은 Google 로그인 Member 전용이다. Guest가 누르면 동작 대신 로그인 유도 모달을 표시한다.
+- Member는 Firebase UID로 신규 방명록을 작성하며 자신의 UID 글만 수정·삭제할 수 있다.
+- Admin은 Firebase 이메일/비밀번호 또는 지정 Google 계정으로 로그인한다. 관리자 판정은 공개 이메일 설정이 아니라 private D1 `admin_roles`의 Firebase UID allowlist만 사용한다.
+- 비밀번호형 방명록의 UI, API, hash/salt, 검증 로직, 데이터 열은 제거한다. 기존 글의 본문·작성일은 보존하되 작성자 UID가 없으므로 방문자 편집 대상에서 제외하며 Admin만 관리한다.
+- 지정 관리자 계정의 이메일·Firebase UID·비밀값은 저장소와 문서에 기록하지 않는다.
+
+### 계층별 범위
+
+- 화면: Member 전용 기능의 로그인 유도 모달, 로그인 뒤 원래 동작 재개, 역할별 UI 제어.
+- 처리: Firebase Google 또는 이메일/비밀번호 인증, Worker 토큰 검증, member/admin HttpOnly 세션 발급.
+- 핵심 규칙: D1 UID allowlist, Guest/Member/Admin 접근 제어, 방명록 UID 소유권.
+- 저장·외부 서비스: Firebase Auth는 신원 확인, Cloudflare Worker/D1은 역할·세션·소유권, Pages는 정적 화면을 담당한다.
+- 의존성·시작: 브라우저에는 API base만 유지하고 Secret은 Worker에서만 관리한다. 시작 시 세션을 확인한 뒤 역할별 UI를 적용한다.
+
+### Process Phase와 Gate
+
+1. 기준선 및 문서: `drill`을 main 기준으로 맞추고 본 계획을 먼저 커밋한다. Gate: 열린 PR·기존 작업 손실 없음.
+2. 운영 진단: Worker Secret 존재·형식, Firebase Provider, OAuth redirect, D1 migration을 비밀값 없이 점검한다. Gate: 이메일 503과 Google 실패 원인을 코드로 분류한다.
+3. Worker·D1: UID 기반 역할과 세션, 비밀번호형 방명록 제거 migration, UID 소유권을 구현한다. Gate: Guest 401, 타 Member 403, Admin 허용.
+4. 화면: Member 전용 모달과 로그인 뒤 재개 흐름을 연결한다. Gate: 공개 기능 회귀 없음, 권한 UI와 API가 일치한다.
+5. 검증·배포: 정적 검사, Actions, HTTP, Guest/Member/Admin 실제 흐름을 점검한다. Gate: 모두 통과한 경우만 main 병합·Pages/Worker 배포 및 불필요 브랜치 정리를 한다.
+
+### 실패 재수정 Loop 및 검증
+
+실패한 Gate의 오류 코드·재현 조건만 기록하고 Firebase/OAuth/Worker Secret/D1/코드 중 원인을 좁혀 최소 변경으로 수정한 뒤 해당 Gate부터 재검증한다. 코드·문서·로그에는 API key, OAuth secret, Firebase UID, 관리자 이메일을 쓰지 않는다.
