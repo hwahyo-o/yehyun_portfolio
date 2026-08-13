@@ -124,8 +124,8 @@ In Cloudflare Dashboard:
 5. Run the administrator insert only after the schema succeeds:
 
 ```sql
-INSERT INTO admin_roles (uid, email, created_at)
-VALUES ('YOUR_FIREBASE_ADMIN_UID', 'YOUR_ADMIN_EMAIL', datetime('now'));
+INSERT INTO admin_roles (uid, created_at)
+VALUES ('FIREBASE_UID_FROM_PRIVATE_CONSOLE', datetime('now'));
 ```
 
 Do not add an administrator UID or email to the public repository. The value belongs in the private D1 database, and the insert is intentionally deferred until the final gate.
@@ -206,3 +206,12 @@ After the PR is merged into main:
 5. Run it once and confirm the table verification step succeeds.
 
 This migration is separate from the existing D1 migration workflow and should not be repeated after success.
+
+
+## Member access and UID-owned guestbook
+
+- Google OAuth completes Firebase sign-in in the Worker. A UID present in private D1 `admin_roles` receives an administrator session; every other successful Google account receives a Member session.
+- Member-only operations are Guestbook create/update/delete, content sharing and reactions, and Direct Message. The Worker verifies the HttpOnly session and UID for every write; the browser-only login modal is not an authorization control.
+- Guestbook passwords are not supported. Existing guestbook messages are preserved by the one-time `schema/007_member_guestbook.sql` migration but have no `author_uid`, so only an administrator can edit or delete them.
+- Before deploying this Worker change to an existing D1 database, run **Apply member guestbook migration** once from the intended branch and enter its exact confirmation phrase. Do not rerun it after success: it intentionally removes obsolete password columns.
+- To grant the designated administrator account access, obtain its Firebase UID only from the authenticated provider console and insert that UID into private D1. Do not commit, log, or paste the UID, email, password, API key, client secret, refresh token, or encryption key.
