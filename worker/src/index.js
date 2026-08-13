@@ -1520,7 +1520,7 @@ function withCors(response, origin, env) {
     headers.set('Access-Control-Allow-Credentials', 'true');
     headers.set('Vary', 'Origin');
   }
-  headers.set('Access-Control-Allow-Headers', 'Content-Type, Range, X-Portfolio-Request');
+  headers.set('Access-Control-Allow-Headers', 'Authorization, Content-Type, Range, X-Portfolio-Request');
   headers.set('Access-Control-Allow-Methods', 'GET, POST, PATCH, DELETE, OPTIONS');
   return new Response(response.body, { status: response.status, headers });
 }
