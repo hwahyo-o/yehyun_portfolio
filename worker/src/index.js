@@ -28,6 +28,9 @@ async function route(request, env, ctx, visitorId) {
     if (url.pathname === '/api/auth/google/start' && request.method === 'GET') {
       return await startFirebaseGoogleLogin(env);
     }
+    if (url.pathname === '/api/auth/google/link/start' && request.method === 'GET') {
+      return await startFirebaseGoogleLink(request, env);
+    }
     if (url.pathname === '/oauth/google/login-callback' && request.method === 'GET') {
       return await finishFirebaseGoogleLogin(request, env, ctx);
     }
@@ -962,14 +965,13 @@ async function isAdmin(claims, env) {
   return Boolean(await env.DB.prepare('SELECT uid FROM admin_roles WHERE uid = ?').bind(claims.sub).first());
 }
 
-async function startFirebaseGoogleLogin(env) {
+function requireFirebaseGoogleConfig(env) {
   if (!env.GOOGLE_CLIENT_ID || !env.GOOGLE_CLIENT_SECRET || !env.GOOGLE_LOGIN_REDIRECT_URI || !env.FIREBASE_WEB_API_KEY) {
     throw httpError('GOOGLE_LOGIN_NOT_CONFIGURED', 'Google 로그인 설정이 필요합니다.', 503);
   }
-  await env.DB.prepare('DELETE FROM firebase_google_login_states WHERE created_at < ?').bind(new Date(Date.now() - 10 * 60 * 1000).toISOString()).run();
-  const state = crypto.randomUUID();
-  await env.DB.prepare('INSERT INTO firebase_google_login_states (state, created_at) VALUES (?, ?)')
-    .bind(state, new Date().toISOString()).run();
+}
+
+function googleAuthorizationUrl(env, state) {
   const params = new URLSearchParams({
     client_id: env.GOOGLE_CLIENT_ID,
     redirect_uri: env.GOOGLE_LOGIN_REDIRECT_URI,
@@ -979,10 +981,28 @@ async function startFirebaseGoogleLogin(env) {
     prompt: 'select_account',
     state,
   });
-  return new Response(null, {
-    status: 302,
-    headers: { Location: 'https://accounts.google.com/o/oauth2/v2/auth?' + params.toString() },
-  });
+  return 'https://accounts.google.com/o/oauth2/v2/auth?' + params.toString();
+}
+
+async function startFirebaseGoogleLogin(env) {
+  requireFirebaseGoogleConfig(env);
+  await env.DB.prepare('DELETE FROM firebase_google_login_states WHERE created_at < ?').bind(new Date(Date.now() - 10 * 60 * 1000).toISOString()).run();
+  const state = crypto.randomUUID();
+  await env.DB.prepare('INSERT INTO firebase_google_login_states (state, created_at) VALUES (?, ?)')
+    .bind(state, new Date().toISOString()).run();
+  return new Response(null, { status: 302, headers: { Location: googleAuthorizationUrl(env, state) } });
+}
+
+async function startFirebaseGoogleLink(request, env) {
+  requireFirebaseGoogleConfig(env);
+  const claims = await requireAdmin(request, env);
+  const sessionToken = readCookie(request, 'portfolio_admin_session');
+  const sessionId = await hashSessionToken(sessionToken);
+  await env.DB.prepare('DELETE FROM firebase_google_link_states WHERE created_at < ?').bind(new Date(Date.now() - 10 * 60 * 1000).toISOString()).run();
+  const state = crypto.randomUUID();
+  await env.DB.prepare('INSERT INTO firebase_google_link_states (state, uid, session_id, created_at) VALUES (?, ?, ?, ?)')
+    .bind(state, claims.sub, sessionId, new Date().toISOString()).run();
+  return json({ authorizationUrl: googleAuthorizationUrl(env, state) });
 }
 
 function firebaseAuthErrorCode(payload) {
@@ -993,53 +1013,59 @@ function firebaseAuthErrorCode(payload) {
   return 'AUTH_SERVICE_ERROR';
 }
 
+async function exchangeGoogleAuthorizationCode(code, env) {
+  const response = await fetchWithTimeout('https://oauth2.googleapis.com/token', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({
+      client_id: env.GOOGLE_CLIENT_ID || '',
+      client_secret: env.GOOGLE_CLIENT_SECRET || '',
+      code,
+      grant_type: 'authorization_code',
+      redirect_uri: env.GOOGLE_LOGIN_REDIRECT_URI || '',
+    }),
+  });
+  if (!response.ok) throw httpError('GOOGLE_OAUTH_FAILED', 'Google 인증 교환에 실패했습니다.', 502);
+  const token = await response.json();
+  if (!token.id_token) throw httpError('GOOGLE_OAUTH_FAILED', 'Google 인증 토큰이 없습니다.', 502);
+  return token;
+}
+
 async function finishFirebaseGoogleLogin(request, env, ctx) {
   const url = new URL(request.url);
   const state = url.searchParams.get('state') || '';
   const code = url.searchParams.get('code') || '';
   if (!state || !code) return oauthRedirect(env, 'admin-google-login-error');
 
+  const linkState = await env.DB.prepare('SELECT state, uid, session_id, created_at FROM firebase_google_link_states WHERE state = ?').bind(state).first();
+  if (linkState) return finishFirebaseGoogleLink(request, env, linkState, code);
+
   const stateRow = await env.DB.prepare('SELECT state, created_at FROM firebase_google_login_states WHERE state = ?').bind(state).first();
-  if (!stateRow || Date.now() - Date.parse(stateRow.created_at) > 10 * 60 * 1000) {
-    return oauthRedirect(env, 'admin-google-login-expired');
-  }
+  if (!stateRow || Date.now() - Date.parse(stateRow.created_at) > 10 * 60 * 1000) return oauthRedirect(env, 'admin-google-login-expired');
   await env.DB.prepare('DELETE FROM firebase_google_login_states WHERE state = ?').bind(state).run();
 
-  let tokenResponse;
+  let googleToken;
   try {
-    tokenResponse = await fetchWithTimeout('https://oauth2.googleapis.com/token', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: new URLSearchParams({
-        client_id: env.GOOGLE_CLIENT_ID || '',
-        client_secret: env.GOOGLE_CLIENT_SECRET || '',
-        code,
-        grant_type: 'authorization_code',
-        redirect_uri: env.GOOGLE_LOGIN_REDIRECT_URI || '',
-      }),
-    });
+    googleToken = await exchangeGoogleAuthorizationCode(code, env);
   } catch (error) {
     return oauthRedirect(env, googleErrorFragment(error.code));
   }
-  if (!tokenResponse.ok) return oauthRedirect(env, 'admin-google-login-oauth-error');
-  const googleToken = await tokenResponse.json();
-  if (!googleToken.id_token) return oauthRedirect(env, 'admin-google-login-oauth-error');
 
   let firebaseResponse;
   try {
     firebaseResponse = await fetchWithTimeout(
       'https://identitytoolkit.googleapis.com/v1/accounts:signInWithIdp?key=' + encodeURIComponent(env.FIREBASE_WEB_API_KEY || ''),
-    {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        postBody: new URLSearchParams({ id_token: googleToken.id_token, providerId: 'google.com' }).toString(),
-        requestUri: firebaseRequestUri(env),
-        returnSecureToken: true,
-        returnIdpCredential: false,
-        autoCreate: true,
-      }),
-    },
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          postBody: new URLSearchParams({ id_token: googleToken.id_token, providerId: 'google.com' }).toString(),
+          requestUri: firebaseRequestUri(env),
+          returnSecureToken: true,
+          returnIdpCredential: false,
+          autoCreate: true,
+        }),
+      },
     );
   } catch (error) {
     return oauthRedirect(env, googleErrorFragment(error.code));
@@ -1047,21 +1073,13 @@ async function finishFirebaseGoogleLogin(request, env, ctx) {
   if (!firebaseResponse.ok) {
     const firebaseError = await firebaseResponse.json().catch(() => ({}));
     const reason = String(firebaseError.error?.message || '');
-    if (reason.includes('INVALID_API_KEY') || reason.includes('API_KEY_INVALID')) {
-      return oauthRedirect(env, 'admin-google-login-not-configured');
-    }
-    if (reason.includes('EMAIL_EXISTS') || reason.includes('FEDERATED_USER_ID_ALREADY_LINKED')) {
-      return oauthRedirect(env, 'admin-google-login-link-required');
-    }
-    if (reason.includes('OPERATION_NOT_ALLOWED') || reason.includes('INVALID_PROVIDER_ID')) {
-      return oauthRedirect(env, 'admin-google-login-provider-disabled');
-    }
+    if (reason.includes('INVALID_API_KEY') || reason.includes('API_KEY_INVALID')) return oauthRedirect(env, 'admin-google-login-not-configured');
+    if (reason.includes('EMAIL_EXISTS') || reason.includes('FEDERATED_USER_ID_ALREADY_LINKED')) return oauthRedirect(env, 'admin-google-login-link-required');
+    if (reason.includes('OPERATION_NOT_ALLOWED') || reason.includes('INVALID_PROVIDER_ID')) return oauthRedirect(env, 'admin-google-login-provider-disabled');
     return oauthRedirect(env, 'admin-google-login-provider-error');
   }
   const firebasePayload = await firebaseResponse.json();
-  if (!firebasePayload.idToken || !firebasePayload.refreshToken || !firebasePayload.localId) {
-    return oauthRedirect(env, 'admin-google-login-provider-error');
-  }
+  if (!firebasePayload.idToken || !firebasePayload.refreshToken || !firebasePayload.localId) return oauthRedirect(env, 'admin-google-login-provider-error');
 
   try {
     const claims = await verifyFirebaseToken(firebasePayload.idToken, env);
@@ -1078,6 +1096,54 @@ async function finishFirebaseGoogleLogin(request, env, ctx) {
   }
 }
 
+async function finishFirebaseGoogleLink(request, env, stateRow, code) {
+  const expired = Date.now() - Date.parse(stateRow.created_at) > 10 * 60 * 1000;
+  const sessionToken = readCookie(request, 'portfolio_admin_session');
+  const sessionId = sessionToken ? await hashSessionToken(sessionToken) : '';
+  await env.DB.prepare('DELETE FROM firebase_google_link_states WHERE state = ?').bind(stateRow.state).run();
+  if (expired || sessionId !== stateRow.session_id) return oauthRedirect(env, 'admin-google-link-expired');
+
+  const session = await env.DB.prepare('SELECT uid, refresh_token_ciphertext, refresh_token_iv FROM admin_sessions WHERE id = ?').bind(sessionId).first();
+  if (!session || session.uid !== stateRow.uid) return oauthRedirect(env, 'admin-google-link-expired');
+
+  try {
+    const refreshToken = await decryptSecret(session.refresh_token_ciphertext, session.refresh_token_iv, env.SESSION_ENCRYPTION_KEY);
+    const refreshed = await refreshFirebaseToken(refreshToken, env);
+    const claims = await verifyFirebaseToken(refreshed.idToken, env);
+    if (claims.sub !== stateRow.uid || !await isAdmin(claims, env)) return oauthRedirect(env, 'admin-google-link-forbidden');
+
+    const googleToken = await exchangeGoogleAuthorizationCode(code, env);
+    const response = await fetchWithTimeout(
+      'https://identitytoolkit.googleapis.com/v1/accounts:update?key=' + encodeURIComponent(env.FIREBASE_WEB_API_KEY || ''),
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          idToken: refreshed.idToken,
+          postBody: new URLSearchParams({ id_token: googleToken.id_token, providerId: 'google.com' }).toString(),
+          returnSecureToken: true,
+          returnIdpCredential: false,
+        }),
+      },
+    );
+    if (!response.ok) {
+      const payload = await response.json().catch(() => ({}));
+      const reason = String(payload.error?.message || '');
+      if (reason.includes('FEDERATED_USER_ID_ALREADY_LINKED') || reason.includes('EMAIL_EXISTS')) return oauthRedirect(env, 'admin-google-link-in-use');
+      if (reason.includes('OPERATION_NOT_ALLOWED') || reason.includes('INVALID_PROVIDER_ID')) return oauthRedirect(env, 'admin-google-login-provider-disabled');
+      return oauthRedirect(env, 'admin-google-link-error');
+    }
+    const payload = await response.json();
+    if (!payload.idToken || !payload.refreshToken || payload.localId !== stateRow.uid) return oauthRedirect(env, 'admin-google-link-error');
+    const encrypted = await encryptSecret(payload.refreshToken, env.SESSION_ENCRYPTION_KEY);
+    await env.DB.prepare('UPDATE admin_sessions SET refresh_token_ciphertext = ?, refresh_token_iv = ?, updated_at = ? WHERE id = ?')
+      .bind(encrypted.ciphertext, encrypted.iv, new Date().toISOString(), sessionId).run();
+    return oauthRedirect(env, 'admin-google-link-success');
+  } catch (error) {
+    return oauthRedirect(env, googleErrorFragment(error.code).replace('admin-google-login-', 'admin-google-link-'));
+  }
+}
+
 function googleErrorFragment(code) {
   const fragments = {
     AUTH_NOT_CONFIGURED: 'admin-google-login-not-configured',
@@ -1089,6 +1155,7 @@ function googleErrorFragment(code) {
     AUTH_UPSTREAM_TIMEOUT: 'admin-google-login-timeout',
     AUTH_PROVIDER_DISABLED: 'admin-google-login-provider-disabled',
     AUTH_TOKEN_VERIFY_FAILED: 'admin-google-login-token-error',
+    GOOGLE_OAUTH_FAILED: 'admin-google-login-oauth-error',
   };
   return fragments[code] || 'admin-google-login-error';
 }
