@@ -493,12 +493,10 @@ button:focus-visible { outline: 2px solid var(--ink); outline-offset: 4px; }
   padding: 0;
   overflow: hidden;
 }
-.gallery-track {
-  display: flex;
+.gallery-swiper {
   width: 100%;
-  transform: translate3d(0, 0, 0);
-  transition: transform .38s ease;
-  will-change: transform;
+  min-height: 280px;
+  overflow: hidden;
 }
 .gallery-slide {
   flex: 0 0 100%;
@@ -512,7 +510,6 @@ button:focus-visible { outline: 2px solid var(--ink); outline-offset: 4px; }
 }
 .gallery-slide:nth-child(2) { background: #bce7f4; }
 .gallery-slide:nth-child(3) { background: #c8bcff; }
-.gallery-slide:nth-child(4) { background: #d7d7d7; }
 .gallery-slide span {
   max-width: 430px;
   font-size: clamp(.9rem, 1.4vw, 1.15rem);
@@ -589,7 +586,7 @@ button:focus-visible { outline: 2px solid var(--ink); outline-offset: 4px; }
   transform: translateY(-2px);
 }
 @media (prefers-reduced-motion: reduce) {
-  .gallery-track { transition: none; }
+  .gallery-swiper { transition: none; }
 }
 @media (max-width: 620px) {
   .gallery-slide { min-height: 230px; padding: 24px; }
@@ -614,9 +611,9 @@ button:focus-visible { outline: 2px solid var(--ink); outline-offset: 4px; }
   .project-nav-thumb { width: 58px; }
 }
 
-/* Keep the gallery frame visible while clipping only the moving rail. */
+/* Keep the gallery frame visible while the Swiper viewport clips its moving rail. */
 .hero-media-slot { overflow: visible; }
-.gallery-track { overflow: hidden; }
+.gallery-swiper { overflow: hidden; }
 
 /* Gallery visual refinement: corner-only frame and fixed pagination ornament */
 .hero-media-slot::before,
