@@ -1,8 +1,5 @@
 -- One-time migration: remove password-based guestbook ownership and preserve legacy messages.
 -- Run only through the explicitly confirmed GitHub Actions workflow.
-PRAGMA foreign_keys = OFF;
-BEGIN;
-
 CREATE TABLE guestbook_comments_member (
   id TEXT PRIMARY KEY,
   name TEXT NOT NULL,
@@ -35,5 +32,3 @@ ALTER TABLE guestbook_replies_member RENAME TO guestbook_replies;
 CREATE INDEX idx_guestbook_created ON guestbook_comments(created_at DESC);
 ALTER TABLE conversations ADD COLUMN owner_uid TEXT;
 
-COMMIT;
-PRAGMA foreign_keys = ON;
