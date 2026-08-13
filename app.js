@@ -58,7 +58,7 @@ const notificationList = document.querySelector('#notification-list');
 const notificationCount = document.querySelector('#notification-count');
 const driveConnectionStatus = document.querySelector('#drive-connection-status');
 const googleLinkStatus = document.querySelector('#google-link-status');
-const googleSetupForm = document.querySelector('#google-setup-form');
+const googleLinkForm = document.querySelector('#google-link-form');
 const backupList = document.querySelector('#backup-list');
 const backupListStatus = document.querySelector('#backup-list-status');
 const backupStatus = document.querySelector('#backup-status');
@@ -698,19 +698,6 @@ async function handleGoogleLoginCallback() {
     'admin-google-login-forbidden': 'Google 계정이 관리자 권한으로 등록되지 않았습니다.',
     'admin-google-login-expired': 'Google 로그인 요청이 만료되었습니다. 다시 시도해주세요.',
     'admin-google-login-link-required': '기존 Firebase 이메일 계정과 Google 계정 연결이 필요합니다.',
-    'admin-google-setup-success': 'Google 로그인과 Drive 백업 연결이 완료되었습니다. Portfolio-con 폴더가 준비되었습니다.',
-    'admin-google-setup-expired': 'Google 및 Drive 연결 요청이 만료되었습니다. 다시 시도해주세요.',
-    'admin-google-setup-forbidden': '현재 관리자 계정과 일치하지 않아 연결할 수 없습니다.',
-    'admin-google-setup-in-use': '이 Google 계정은 다른 Firebase 사용자에 이미 연결되어 있습니다.',
-    'admin-google-setup-relogin': '관리자 이메일 또는 비밀번호를 다시 확인해주세요.',
-    'admin-google-setup-oauth-error': 'Google 인증 교환에 실패했습니다. OAuth 설정을 확인해주세요.',
-    'admin-google-setup-timeout': 'Google 인증 서버 응답 시간이 초과되었습니다. 다시 시도해주세요.',
-    'admin-google-setup-drive-token-error': 'Drive 권한 토큰을 받지 못했습니다. Google 권한을 다시 승인해주세요.',
-    'admin-google-setup-drive-secret-error': 'Google Drive 서버 보안 설정을 확인해주세요.',
-    'admin-google-setup-drive-auth-error': 'Google Drive 권한을 갱신하지 못했습니다. 다시 시도해주세요.',
-    'admin-google-setup-drive-folder-read-error': 'Google Drive 백업 폴더를 확인하지 못했습니다. Drive API와 권한을 확인해주세요.',
-    'admin-google-setup-drive-folder-create-error': 'Google Drive Portfolio-con 폴더를 만들지 못했습니다. Drive 권한을 다시 승인해주세요.',
-    'admin-google-setup-link-error': 'Google 계정 연결에 실패했습니다. 다시 시도해주세요.',
     'admin-google-link-success': 'Google 계정 연결이 완료되었습니다. 다음부터 Google 로그인으로 관리자 모드에 접속할 수 있습니다.',
     'admin-google-link-expired': 'Google 계정 연결 요청이 만료되었습니다. 이메일/비밀번호로 다시 로그인한 뒤 재시도해주세요.',
     'admin-google-link-forbidden': '현재 관리자 세션으로 Google 계정을 연결할 권한이 없습니다.',
@@ -744,12 +731,10 @@ async function handleGoogleLoginCallback() {
     'admin-google-login-error': 'Google 로그인에 실패했습니다. 설정을 확인해주세요.',
   };
   if (!messages[result]) return;
-  const isSetupResult = result.startsWith('admin-google-setup-');
-  const isLinkResult = result.startsWith('admin-google-link-') || isSetupResult;
+  const isLinkResult = result.startsWith('admin-google-link-');
   const isDriveResult = result.startsWith('admin-drive-');
   const status = isLinkResult ? googleLinkStatus : isDriveResult ? driveConnectionStatus : result.startsWith('admin-') ? adminLoginStatus : memberLoginStatus;
   status.textContent = messages[result];
-  if (result === 'admin-google-setup-success') driveConnectionStatus.textContent = '연결됨 · Portfolio-con 준비됨';
   if (isLinkResult || isDriveResult) openModal(settingsModal);
   else openModal(result.startsWith('admin-') ? adminLoginModal : memberLoginModal);
   window.history.replaceState(null, '', window.location.pathname + window.location.search);
@@ -907,6 +892,12 @@ document.addEventListener('click', (event) => {
       });
   }
   if (action === 'backup-now') createBackup('manual');
+  if (action === 'drive-connect') {
+    driveConnectionStatus.textContent = 'Google Drive 권한 승인 화면으로 이동 중…';
+    apiRequest('/api/admin/drive/start', { headers: { Accept: 'application/json' } })
+      .then((payload) => { window.location.assign(payload.authorizationUrl); })
+      .catch((error) => { driveConnectionStatus.textContent = error.message; });
+  }
   if (action === 'drive-disconnect') {
     if (window.confirm('Google Drive 연결을 끊을까요? 백업 파일은 삭제되지 않습니다.')) {
       apiRequest('/api/admin/drive/disconnect', { method: 'POST' })
@@ -936,17 +927,17 @@ document.addEventListener('click', (event) => {
   }
 });
 
-googleSetupForm?.addEventListener('submit', async (event) => {
+googleLinkForm?.addEventListener('submit', async (event) => {
   event.preventDefault();
   if (!state.isAdmin) return;
-  const form = new FormData(googleSetupForm);
+  const form = new FormData(googleLinkForm);
   googleLinkStatus.textContent = 'Google 계정 선택 화면으로 이동 중…';
   try {
-    const payload = await apiRequest('/api/admin/google/setup/start', {
+    const payload = await apiRequest('/api/admin/google/link/start', {
       method: 'POST',
       body: JSON.stringify({ email: form.get('email'), password: form.get('password') }),
     });
-    googleSetupForm.reset();
+    googleLinkForm.reset();
     window.location.assign(payload.authorizationUrl);
   } catch (error) {
     googleLinkStatus.textContent = error.message;
