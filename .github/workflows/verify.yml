@@ -49,6 +49,11 @@ jobs:
           grep -q 'gallery-title.png' index.html
           grep -q 'gallery-corner-frame.png' index.html
           grep -q 'gallery-pagination-active.png' index.html
+          grep -q 'mail.google.com/mail/?view=cm&amp;fs=1&amp;to=ajas03974%40gmail.com' index.html
+          grep -q 'target="_blank" rel="noopener noreferrer"' index.html
+          grep -q 'top: 626px' styles.css
+          grep -q 'top: 493px' styles.css
+          grep -q 'top: 376px' styles.css
           grep -q 'drop-shadow(-5px 5px 0 rgba(0, 0, 0, 1))' styles.css
           grep -q 'drop-shadow(5px 5px 0 rgba(0, 0, 0, 1))' styles.css
           grep -q 'drop-shadow(-5px -5px 0 rgba(0, 0, 0, 1))' styles.css
@@ -57,7 +62,7 @@ jobs:
           grep -q "slidesPerView: 'auto'" app.js
           grep -q 'centeredSlides: true' app.js
           grep -q 'realIndexChange' app.js
-          grep -q 'delay: 1200' app.js
+          grep -q 'delay: 3000' app.js
           ! grep -q 'gallery-track\|startGalleryLoop' app.js
           grep -q "getBearer(request) ? await requireUser(request, env) : null" worker/src/index.js
           grep -q "verifyAuthSession({ reportError: true })" app.js
