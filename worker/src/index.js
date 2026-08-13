@@ -581,7 +581,7 @@ async function finishGoogleDriveOAuth(request, env) {
   const token = await tokenResponse.json();
   if (!token.refresh_token || !env.GOOGLE_TOKEN_ENCRYPTION_KEY) return oauthRedirect(env, 'admin-drive-secret-error');
   const encrypted = await encryptSecret(token.refresh_token, env.GOOGLE_TOKEN_ENCRYPTION_KEY);
-  const googleSubject = token.id_token ? JSON.parse(decode(token.id_token.split('.')[1])).sub || null : null;
+  const googleSubject = googleSubjectFromIdToken(token.id_token);
   const now = new Date().toISOString();
   await env.DB.prepare(`INSERT INTO google_drive_connections (id, uid, google_subject, refresh_token_ciphertext, refresh_token_iv, created_at, updated_at)
     VALUES ('primary', ?, ?, ?, ?, ?, ?)
@@ -1062,6 +1062,7 @@ async function finishAdminGoogleSetup(env, stateRow, code) {
     if (claims.sub !== stateRow.uid || !await isAdmin(claims, env)) return oauthRedirect(env, 'admin-google-setup-forbidden');
 
     const googleToken = await exchangeGoogleAuthorizationCode(code, env);
+    const googleSubject = googleSubjectFromIdToken(googleToken.id_token);
     if (!googleToken.refresh_token) return oauthRedirect(env, 'admin-google-setup-drive-token-error');
 
     const linked = await fetchWithTimeout(
@@ -1087,7 +1088,6 @@ async function finishAdminGoogleSetup(env, stateRow, code) {
     const driveSecret = await encryptSecret(googleToken.refresh_token, env.GOOGLE_TOKEN_ENCRYPTION_KEY);
     const sessionSecret = await encryptSecret(firebase.refreshToken, env.SESSION_ENCRYPTION_KEY);
     const now = new Date().toISOString();
-    const googleSubject = googleToken.id_token ? JSON.parse(decode(googleToken.id_token.split('.')[1])).sub || null : null;
     await env.DB.batch([
       env.DB.prepare('UPDATE auth_sessions SET refresh_token_ciphertext = ?, refresh_token_iv = ?, updated_at = ? WHERE id = ?')
         .bind(sessionSecret.ciphertext, sessionSecret.iv, now, stateRow.session_id),
@@ -1416,6 +1416,25 @@ function encode(bytes) {
   bytes.forEach((byte) => { binary += String.fromCharCode(byte); });
   return btoa(binary);
 }
+
+function decodeBytes(value) {
+  const source = String(value || '').trim().replace(/-/g, '+').replace(/_/g, '/');
+  const padded = source + '='.repeat((4 - source.length % 4) % 4);
+  const binary = atob(padded);
+  return Uint8Array.from(binary, (character) => character.charCodeAt(0));
+}
+
+function googleSubjectFromIdToken(idToken) {
+  try {
+    const payload = String(idToken || '').split('.')[1];
+    const subject = JSON.parse(new TextDecoder().decode(decodeBytes(payload))).sub;
+    if (!subject) throw new Error('missing_subject');
+    return subject;
+  } catch {
+    throw httpError('GOOGLE_OAUTH_FAILED', 'Google 인증 토큰을 확인할 수 없습니다.', 502);
+  }
+}
+
 
 function cleanText(value, maxLength) {
   return String(value || '').trim().replace(/[<>]/g, '').slice(0, maxLength);
