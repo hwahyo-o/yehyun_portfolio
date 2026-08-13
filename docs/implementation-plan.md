@@ -1034,3 +1034,25 @@ GitHub Pages와 workers.dev의 교차 사이트 HttpOnly 쿠키는 브라우저�
 ### 실패 재수정 Loop
 
 CORS 오류가 남으면 Network의 OPTIONS 응답에서 allow-origin, allow-headers, allow-methods를 확인하고 정확히 누락된 항목만 추가한다. 허용 origin을 wildcard로 완화하거나 credentials·Secret·UID를 노출하지 않는다.
+
+
+## 36. 2026-08-13 이메일 로그인 직후 세션 확인 실패 수정
+
+### 원인
+
+이메일 로그인 요청은 Firebase sign-in, Firebase ID token lookup, D1 admin_roles UID allowlist, auth_sessions 저장까지 완료한 뒤 응답한다. 그러나 다음 GET /api/auth/session에서 requireUser가 다시 Firebase refresh token 교환과 accounts:lookup을 수행한다. 이 중복 외부 의존 호출이 실패하면 optionalUser가 user:null을 반환해 화면이 “로그인 세션을 확인하지 못했습니다”로 끝난다. 이 단계는 이미 인증이 끝난 로그인 직후에는 권한 판정에 불필요하다.
+
+### 수정 범위와 규칙
+
+- auth_sessions의 hash된 opaque token, UID, role, 만료 시각을 단일 서버 세션 근거로 사용한다.
+- requireUser는 Bearer token hash와 D1 세션 만료만 확인해 UID와 role을 반환한다.
+- requireAdmin은 매 요청 private D1 admin_roles allowlist를 다시 조회한다. 관리자 권한 철회는 즉시 반영된다.
+- Firebase 인증·UID 확인은 로그인 및 Google provider-link 같은 Firebase 작업이 필요한 경계에서만 수행한다.
+- 세션은 12시간 만료와 logout 삭제를 유지한다. raw token, password, UID, refresh token은 노출하지 않는다.
+
+### Gate 및 실패 재수정 Loop
+
+1. Worker: 이메일 로그인 이후 session endpoint가 Firebase 외부 호출 없이 D1 session으로 user를 반환한다. Gate: sessionStorage Bearer -> GET session -> admin user.
+2. 권한: Member admin endpoint는 403, allowlist 삭제 후 Admin endpoint는 403, 만료·logout은 401이다.
+3. 검증·배포: drill static check, main Worker/Pages deploy 성공 뒤 이메일 로그인 화면을 재검증한다.
+4. 실패 시 Network에서 login 응답과 session 응답을 분리해 확인하고 실패 단계만 최소 수정한다. CORS·origin·Secret·Firebase 구성을 완화하거나 공개하지 않는다.
