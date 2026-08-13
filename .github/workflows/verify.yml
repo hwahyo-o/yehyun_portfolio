@@ -2,7 +2,7 @@ name: Verify static portfolio
 
 on:
   push:
-    branches: [drill, drill-oauth-rebuild]
+    branches: [drill, drill-oauth-rebuild, drill-oauth-token-fix]
   pull_request:
     branches: [main]
 
@@ -56,6 +56,9 @@ jobs:
           grep -q 'accounts:update' worker/src/index.js
           grep -q 'admin_google_setup_states' worker/src/index.js
           grep -q 'firebase_id_token_ciphertext' worker/src/index.js
+          grep -q 'function decodeBytes' worker/src/index.js
+          grep -q 'googleSubjectFromIdToken' worker/src/index.js
+          ! grep -q 'JSON.parse(decode(' worker/src/index.js
           grep -q 'googleSetupAuthorizationUrl' worker/src/index.js
           grep -q "getOrCreateDriveFolder(accessToken, 'Backups', rootId)" worker/src/index.js
           grep -q 'drive_storage_roots' worker/src/index.js
