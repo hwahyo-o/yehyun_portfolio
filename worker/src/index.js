@@ -903,27 +903,12 @@ async function requireUser(request, env) {
   if (!token) throw httpError('AUTH_REQUIRED', '로그인이 필요합니다.', 401);
   requireCsrfHeader(request);
   const sessionId = await hashSessionToken(token);
-  const row = await env.DB.prepare('SELECT uid, role, refresh_token_ciphertext, refresh_token_iv, expires_at FROM auth_sessions WHERE id = ?').bind(sessionId).first();
+  const row = await env.DB.prepare('SELECT uid, role, expires_at FROM auth_sessions WHERE id = ?').bind(sessionId).first();
   if (!row || Date.parse(row.expires_at) <= Date.now()) {
     if (row) await env.DB.prepare('DELETE FROM auth_sessions WHERE id = ?').bind(sessionId).run();
     throw httpError('AUTH_REQUIRED', '로그인이 만료되었습니다.', 401);
   }
-  try {
-    const refreshToken = await decryptSecret(row.refresh_token_ciphertext, row.refresh_token_iv, env.SESSION_ENCRYPTION_KEY);
-    const refreshed = await refreshFirebaseToken(refreshToken, env);
-    const claims = await verifyFirebaseToken(refreshed.idToken, env);
-    if (claims.sub !== row.uid) throw httpError('AUTH_REQUIRED', '로그인이 만료되었습니다.', 401);
-    if (refreshed.refreshToken !== refreshToken) {
-      const encrypted = await encryptSecret(refreshed.refreshToken, env.SESSION_ENCRYPTION_KEY);
-      await env.DB.prepare('UPDATE auth_sessions SET refresh_token_ciphertext = ?, refresh_token_iv = ?, updated_at = ? WHERE id = ?')
-        .bind(encrypted.ciphertext, encrypted.iv, new Date().toISOString(), sessionId).run();
-    }
-    return { claims, role: row.role, sessionId };
-  } catch (error) {
-    await env.DB.prepare('DELETE FROM auth_sessions WHERE id = ?').bind(sessionId).run();
-    if (error.code === 'AUTH_REQUIRED') throw error;
-    throw httpError('AUTH_REQUIRED', '로그인이 만료되었습니다.', 401);
-  }
+  return { claims: { sub: row.uid }, role: row.role, sessionId };
 }
 
 async function requireAdmin(request, env) {
