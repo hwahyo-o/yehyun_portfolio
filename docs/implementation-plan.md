@@ -1186,3 +1186,8 @@ Google OAuth 승인 뒤 Worker callback은 암호화된 Firebase ID token과 Dri
 ### 실패 시 재수정 Loop
 
 Google 계정 연결 실패는 Firebase provider-link 단계만, Drive 연결 실패는 token 교환·Drive root 단계만 수정한다. 어느 단계에서도 다른 연결 데이터를 삭제하지 않는다. 비밀번호, OAuth code, access/refresh token, Client Secret, UID는 문서·코드·로그에 기록하지 않는다.
+
+
+## 42. 2026-08-13 Worker module duplicate declaration hotfix
+
+Cloudflare Worker deploy에서 기존 googleLinkErrorFragment와 동일 이름의 helper가 추가되어 ES-module build가 거부됐다. 기존 helper를 재사용하고 중복 선언을 제거한다. Gate: Wrangler build와 Worker deploy가 성공해야 하며, Pages 화면과 Worker route 계약이 다시 일치해야 한다. 실패 시 이 단일 build error만 수정·재배포한다.
