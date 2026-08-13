@@ -204,7 +204,7 @@ function initGallerySwiper() {
     loop: true,
     speed: 380,
     autoplay: {
-      delay: 1200,
+      delay: 3000,
       disableOnInteraction: false,
       pauseOnMouseEnter: false,
     },
