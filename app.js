@@ -18,7 +18,6 @@ const state = {
   nameFont: fonts[0],
   lastPointer: null,
   lastShuffleAt: 0,
-  galleryIndex: 0,
   chatTimer: null,
   isAdmin: false,
   user: null,
@@ -33,8 +32,7 @@ const homePage = document.querySelector('#home-page');
 const categoryPage = document.querySelector('#category-page');
 const categoryName = document.querySelector('#category-name');
 const categoryDetailName = document.querySelector('#category-detail-name');
-const galleryTrack = document.querySelector('#gallery-track');
-const gallerySlides = document.querySelectorAll('[data-gallery-slide]');
+const gallerySwiperElement = document.querySelector('#gallery-swiper');
 const reducedMotionQuery = window.matchMedia('(prefers-reduced-motion: reduce)');
 const apiBase = String(window.PORTFOLIO_CONFIG?.apiBase || '').replace(/\/$/, '');
 const themeToggle = document.querySelector('#theme-toggle');
@@ -184,40 +182,18 @@ function bindNameShuffle() {
   nameDisplay.addEventListener('focus', shuffleNameFont);
 }
 
-function showGallerySlide(index, instant = false) {
-  if (!galleryTrack) return;
+function initGallerySwiper() {
+  if (!gallerySwiperElement || !window.Swiper || reducedMotionQuery.matches) return;
 
-  galleryTrack.style.transition = instant ? 'none' : '';
-  galleryTrack.style.transform = `translate3d(-${index * 100}%, 0, 0)`;
-
-  if (instant) {
-    window.requestAnimationFrame(() => {
-      galleryTrack.style.transition = '';
-    });
-  }
-}
-
-function advanceGallery() {
-  const loopEnd = gallerySlides.length - 1;
-  if (loopEnd < 1) return;
-
-  if (state.galleryIndex === loopEnd - 1) {
-    state.galleryIndex = loopEnd;
-    showGallerySlide(state.galleryIndex);
-    window.setTimeout(() => {
-      state.galleryIndex = 0;
-      showGallerySlide(0, true);
-    }, 380);
-    return;
-  }
-
-  state.galleryIndex += 1;
-  showGallerySlide(state.galleryIndex);
-}
-
-function startGalleryLoop() {
-  if (!galleryTrack || gallerySlides.length < 2 || reducedMotionQuery.matches) return;
-  window.setInterval(advanceGallery, 800);
+  new window.Swiper(gallerySwiperElement, {
+    loop: true,
+    speed: 380,
+    autoplay: {
+      delay: 800,
+      disableOnInteraction: false,
+      pauseOnMouseEnter: false,
+    },
+  });
 }
 
 function applyTheme(theme) {
@@ -932,7 +908,7 @@ try {
     loadCommunity();
     consumeDriveCallbackHash();
   });
-  startGalleryLoop();
+  initGallerySwiper();
 } catch (error) {
   console.error('portfolio_start_failed');
 }
