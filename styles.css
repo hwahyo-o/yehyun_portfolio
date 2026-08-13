@@ -707,7 +707,7 @@ button:focus-visible { outline: 2px solid var(--ink); outline-offset: 4px; }
 }
 .gallery-pagination-button {
   position: relative;
-  width: 30px;
+  width: 15px;
   height: 10px;
   padding: 0;
   border: 0;
@@ -715,7 +715,7 @@ button:focus-visible { outline: 2px solid var(--ink); outline-offset: 4px; }
   background: var(--ink);
 }
 .gallery-pagination-button.is-active {
-  width: 70px;
+  width: 35px;
   height: 15px;
 }
 .gallery-pagination-button img {
