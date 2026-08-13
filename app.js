@@ -209,8 +209,24 @@ function initTheme() {
   applyTheme(saved || 'light');
 }
 
+const AUTH_TOKEN_KEY = 'portfolio-auth-session';
+
+function readAuthToken() {
+  return window.sessionStorage.getItem(AUTH_TOKEN_KEY) || '';
+}
+
+function storeAuthSession(payload) {
+  if (!payload?.sessionToken) throw new Error('로그인 세션을 발급하지 못했습니다.');
+  window.sessionStorage.setItem(AUTH_TOKEN_KEY, payload.sessionToken);
+}
+
+function clearAuthSession() {
+  window.sessionStorage.removeItem(AUTH_TOKEN_KEY);
+}
+
 async function authHeaders() {
-  return { 'X-Portfolio-Request': 'portfolio-app' };
+  const token = readAuthToken();
+  return { 'X-Portfolio-Request': 'portfolio-app', ...(token ? { Authorization: 'Bearer ' + token } : {}) };
 }
 
 const authErrorMessages = {
@@ -619,7 +635,7 @@ async function setupAuthSession() {
 async function downloadBackup(id) {
   const response = await fetch(apiBase + '/api/admin/backups/' + encodeURIComponent(id) + '/download', {
     credentials: 'include',
-    headers: { 'X-Portfolio-Request': 'portfolio-app' },
+    headers: await authHeaders(),
   });
   if (!response.ok) throw new Error('백업 다운로드에 실패했습니다.');
   const blob = await response.blob();
@@ -655,11 +671,26 @@ function bindAdminPasswordActions() {
   });
 }
 
-function handleGoogleLoginCallback() {
+async function handleGoogleLoginCallback() {
   const result = window.location.hash.slice(1);
+  const ticket = new URLSearchParams(result).get('auth-ticket');
+  if (ticket) {
+    window.history.replaceState(null, '', window.location.pathname + window.location.search);
+    try {
+      const payload = await apiRequest('/api/auth/ticket', { method: 'POST', body: JSON.stringify({ ticket }) });
+      storeAuthSession(payload);
+      const user = await verifyAuthSession();
+      if (!user) throw new Error('로그인 세션을 확인하지 못했습니다.');
+      return;
+    } catch (error) {
+      clearAuthSession();
+      memberLoginStatus.textContent = authErrorMessage(error);
+      openModal(memberLoginModal);
+      return;
+    }
+  }
+
   const messages = {
-    'admin-google-login-success': 'Google 로그인에 성공했습니다.',
-    'visitor-google-login-success': 'Google 로그인에 성공했습니다.',
     'admin-google-login-forbidden': 'Google 계정이 관리자 권한으로 등록되지 않았습니다.',
     'admin-google-login-expired': 'Google 로그인 요청이 만료되었습니다. 다시 시도해주세요.',
     'admin-google-login-link-required': '기존 Firebase 이메일 계정과 Google 계정 연결이 필요합니다.',
@@ -677,7 +708,7 @@ function handleGoogleLoginCallback() {
     'admin-google-login-not-configured': 'Google 로그인 서버 설정이 완료되지 않았습니다.',
     'admin-google-login-certificates-error': 'Firebase 인증서를 확인할 수 없습니다. 잠시 후 다시 시도해주세요.',
     'admin-google-login-token-error': 'Google 인증 토큰을 확인할 수 없습니다. 다시 시도해주세요.',
-    'admin-google-login-timeout': 'Google 인증 서버 응답 시간이 초과되었습니다. 다시 시도해주세요.',
+    'admin-google-login-timeout': 'Google 인증 서버 응답 시간이 초과되었습니다. 잠시 후 다시 시도해주세요.',
     'admin-google-login-secret-error': '서버 보안 설정이 올바르지 않습니다. 운영 설정을 확인해주세요.',
     'admin-google-login-session-error': '로그인 세션을 저장하지 못했습니다. 잠시 후 다시 시도해주세요.',
     'admin-google-login-error': 'Google 로그인에 실패했습니다. 설정을 확인해주세요.',
@@ -687,7 +718,7 @@ function handleGoogleLoginCallback() {
   const status = isLinkResult ? googleLinkStatus : result.startsWith('admin-') ? adminLoginStatus : memberLoginStatus;
   status.textContent = messages[result];
   if (isLinkResult) openModal(settingsModal);
-  else if (!result.endsWith('-success')) openModal(result.startsWith('admin-') ? adminLoginModal : memberLoginModal);
+  else openModal(result.startsWith('admin-') ? adminLoginModal : memberLoginModal);
   window.history.replaceState(null, '', window.location.pathname + window.location.search);
 }
 
@@ -719,15 +750,16 @@ function bindAdminActions() {
     adminLoginStatus.textContent = '로그인 중…';
     const data = new FormData(adminLoginForm);
     try {
-      await apiRequest('/api/auth/login', {
+      const payload = await apiRequest('/api/auth/login', {
         method: 'POST',
         body: JSON.stringify({
           email: String(data.get('email') || ''),
           password: String(data.get('password') || ''),
         }),
       });
+      storeAuthSession(payload);
       adminLoginForm.reset();
-      await verifyAuthSession();
+      if (!await verifyAuthSession()) throw new Error('로그인 세션을 확인하지 못했습니다. 다시 시도해주세요.');
     } catch (error) {
       adminLoginStatus.textContent = authErrorMessage(error);
     } finally {
@@ -835,6 +867,7 @@ document.addEventListener('click', (event) => {
   if (action === 'admin-logout') {
     apiRequest('/api/auth/logout', { method: 'POST' })
       .finally(() => {
+        clearAuthSession();
         setUserUi(null);
         clearInterval(state.adminTimer);
         clearInterval(state.notificationTimer);
