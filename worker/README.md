@@ -241,3 +241,14 @@ The site and API use different hosted domains, so browser third-party-cookie res
 - D1 stores only token hashes and encrypted Firebase refresh tokens. No raw bearer token, UID list, credential, or provider secret is committed.
 
 This design does not rely on cross-site authentication cookies and remains compatible with the free hosting arrangement. Session tokens expire after twelve hours. A custom same-site domain can be added later without changing roles or Firebase identity rules.
+
+
+## Google account linking and Drive readiness
+
+The Worker uses the same OAuth client for two distinct operations. The configured Client ID and Client Secret must belong to the same active Google Cloud project; after that has been verified, do not change the values or delete that project.
+
+- **Google 계정 연결** binds the selected Google identity to the existing Firebase administrator UID. Its OAuth callback validates the one-time D1 state, its stored server-session hash, the matching UID, and the private administrator allowlist. It does not depend on a browser cookie after the OAuth redirect.
+- **Google Drive 연결** is complete only after the Worker has stored the encrypted refresh token and created the app-owned Portfolio-con/Backups folders. If folder preparation fails, the temporary Drive connection is removed and the settings screen shows a safe reason.
+- The first **지금 수동 백업** creates the date subfolder and JSON backup file. “Drive connected” therefore means the root backup folder is ready; it does not claim that a backup file exists yet.
+
+A second, unused Google Cloud project must be deleted only in the Google Cloud Console after confirming that it has no unrelated APIs, OAuth clients, service accounts, Firebase resources, billing links, or other workloads. Never delete the project whose OAuth Client ID is configured in the Worker.
