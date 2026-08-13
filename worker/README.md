@@ -215,3 +215,16 @@ This migration is separate from the existing D1 migration workflow and should no
 - Guestbook passwords are not supported. Existing guestbook messages are preserved by the one-time `schema/007_member_guestbook.sql` migration but have no `author_uid`, so only an administrator can edit or delete them.
 - Before deploying this Worker change to an existing D1 database, run **Apply member guestbook migration** once from the intended branch and enter its exact confirmation phrase. Do not rerun it after success: it intentionally removes obsolete password columns.
 - To grant the designated administrator account access, obtain its Firebase UID only from the authenticated provider console and insert that UID into private D1. Do not commit, log, or paste the UID, email, password, API key, client secret, refresh token, or encryption key.
+
+
+## Existing administrator Google-provider link
+
+When an administrator already exists as a Firebase email/password user, do not delete or recreate that Firebase user. That would change the UID and break the private D1 administrator allowlist. Instead, after deploying this version:
+
+1. Sign in to the administrator modal with the existing email/password account.
+2. Open **설정 및 백업** and choose **Google 계정 연결**.
+3. Complete the Google account chooser and consent screen.
+4. The Worker exchanges the OAuth code server-side and links the Google credential to the current Firebase UID through Firebase Authentication. It then returns to the settings modal with a success or safe error message.
+5. Sign out and use the administrator Google login button once to confirm that it opens the same administrator role.
+
+The one-time link state is bound to the current HttpOnly administrator session hash and expires after ten minutes. The Worker rejects an expired state, a changed session, a non-admin UID, or a Google identity already linked to another Firebase user. No UID, email, OAuth code, refresh token, API key, or client secret is exposed in code or documentation. The worker deployment applies schema/008_firebase_google_link.sql automatically; do not run the destructive member-guestbook migration again.
