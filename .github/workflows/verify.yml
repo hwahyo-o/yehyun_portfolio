@@ -2,7 +2,7 @@ name: Verify static portfolio
 
 on:
   push:
-    branches: [drill, drill-oauth-rebuild, drill-oauth-token-fix, drill-auth-rebuild, drill-auth-rebuild-fix, drill-firebase-auth, drill-loading-fix, drill-auth-feedback, drill-drive-callback-fix]
+    branches: [drill, drill-oauth-rebuild, drill-oauth-token-fix, drill-auth-rebuild, drill-auth-rebuild-fix, drill-firebase-auth, drill-loading-fix, drill-auth-feedback, drill-drive-callback-fix, drill-fetch-timeout-fix]
   pull_request:
     branches: [main]
 
@@ -56,6 +56,8 @@ jobs:
           grep -q 'requireUser' worker/src/index.js
           grep -q 'Access-Control-Allow-Headers.*, Authorization\|Authorization, Content-Type' worker/src/index.js
           grep -q 'function decodeBytes' worker/src/index.js
+          grep -q 'async function fetchWithTimeout' worker/src/index.js
+          grep -q 'fetchWithTimeout(' worker/src/index.js
           ! grep -q 'googleSubjectFromIdToken' worker/src/index.js
           grep -q "VALUES ('primary', ?, NULL, ?, ?, ?, ?)" worker/src/index.js
           grep -q 'driveCallbackMessages' app.js
