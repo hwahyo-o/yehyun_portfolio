@@ -559,27 +559,28 @@ async function finishGoogleDriveOAuth(request, env) {
   }
   const token = await tokenResponse.json();
   if (!token.refresh_token || !env.GOOGLE_TOKEN_ENCRYPTION_KEY) return oauthRedirect(env, 'admin-drive-secret-error');
-  const encrypted = await encryptSecret(token.refresh_token, env.GOOGLE_TOKEN_ENCRYPTION_KEY);
-  const googleSubject = googleSubjectFromIdToken(token.id_token);
-  const now = new Date().toISOString();
-  await env.DB.prepare(`INSERT INTO google_drive_connections (id, uid, google_subject, refresh_token_ciphertext, refresh_token_iv, created_at, updated_at)
-    VALUES ('primary', ?, ?, ?, ?, ?, ?)
-    ON CONFLICT(id) DO UPDATE SET uid = excluded.uid, google_subject = excluded.google_subject, refresh_token_ciphertext = excluded.refresh_token_ciphertext, refresh_token_iv = excluded.refresh_token_iv, updated_at = excluded.updated_at`)
-    .bind(stateRow.uid, googleSubject, encrypted.ciphertext, encrypted.iv, now, now).run();
+
   try {
+    const encrypted = await encryptSecret(token.refresh_token, env.GOOGLE_TOKEN_ENCRYPTION_KEY);
+    const now = new Date().toISOString();
+    await env.DB.prepare(`INSERT INTO google_drive_connections (id, uid, google_subject, refresh_token_ciphertext, refresh_token_iv, created_at, updated_at)
+      VALUES ('primary', ?, NULL, ?, ?, ?, ?)
+      ON CONFLICT(id) DO UPDATE SET uid = excluded.uid, google_subject = NULL, refresh_token_ciphertext = excluded.refresh_token_ciphertext, refresh_token_iv = excluded.refresh_token_iv, updated_at = excluded.updated_at`)
+      .bind(stateRow.uid, encrypted.ciphertext, encrypted.iv, now, now).run();
+
     const accessToken = await getDriveAccessToken(env);
     const rootId = await getOrCreateDriveFolder(accessToken, 'Portfolio-con');
     await getOrCreateDriveFolder(accessToken, 'Backups', rootId);
     await env.DB.prepare('INSERT INTO drive_storage_roots (id, drive_folder_id, verified_at) VALUES (?, ?, ?) ON CONFLICT(id) DO UPDATE SET drive_folder_id = excluded.drive_folder_id, verified_at = excluded.verified_at')
       .bind('primary', rootId, new Date().toISOString()).run();
+    return oauthRedirect(env, 'admin-drive-connected');
   } catch (error) {
     await env.DB.batch([
       env.DB.prepare('DELETE FROM google_drive_connections WHERE id = ?').bind('primary'),
       env.DB.prepare('DELETE FROM drive_storage_roots WHERE id = ?').bind('primary'),
-    ]);
+    ]).catch(() => {});
     return oauthRedirect(env, driveErrorFragment(error.code));
   }
-  return oauthRedirect(env, 'admin-drive-connected');
 }
 
 function driveErrorFragment(code) {
@@ -1048,37 +1049,6 @@ function decodeBytes(value) {
   return Uint8Array.from(binary, (character) => character.charCodeAt(0));
 }
 
-function googleSubjectFromIdToken(idToken) {
-  try {
-    const payload = String(idToken || '').split('.')[1];
-    const subject = JSON.parse(new TextDecoder().decode(decodeBytes(payload))).sub;
-    if (!subject) throw new Error('missing_subject');
-    return subject;
-  } catch {
-    throw httpError('GOOGLE_OAUTH_FAILED', 'Google 인증 토큰을 확인할 수 없습니다.', 502);
-  }
-}
-
-
-function cleanText(value, maxLength) {
-  return String(value || '').trim().replace(/[<>]/g, '').slice(0, maxLength);
-}
-
-
-async function fetchWithTimeout(resource, options = {}, timeoutMs = 10000) {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), timeoutMs);
-  try {
-    return await fetch(resource, { ...options, signal: controller.signal });
-  } catch (error) {
-    if (error.name === 'AbortError') {
-      throw httpError('AUTH_UPSTREAM_TIMEOUT', '인증 서비스 응답 시간이 초과되었습니다.', 504);
-    }
-    throw error;
-  } finally {
-    clearTimeout(timer);
-  }
-}
 
 async function recordActivity(env, event, ctx) {
   const createdAt = new Date().toISOString();
