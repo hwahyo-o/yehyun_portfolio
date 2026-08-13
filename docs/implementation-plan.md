@@ -1528,3 +1528,16 @@ Drive OAuth는 Google consent 화면과 authorization code 반환까지 성공�
 - 범위: Gallery Hero 제목·페이지네이션의 세로 위치 CSS 및 이를 확인하는 CI만 변경한다.
 - Gate: 데스크톱과 반응형 오프셋이 각각 확정값을 사용하고, Swiper·코너 프레임·Gmail 링크는 회귀 없이 유지된다.
 - 검증 실패 시 CSS·CI 범위에서만 최소 수정 후 재검증한다.
+
+
+---
+
+## 2026-08-13 Gallery Pagination 버튼 폭 축소
+
+- 일반 페이지네이션 버튼 폭: 30px에서 15px로 축소한다.
+- active 페이지네이션 버튼 폭: 70px에서 35px로 축소한다.
+- 버튼 높이, active 장식 이미지 크기, 접근성 라벨, Swiper 상태 연동은 변경하지 않는다.
+- Gate: CSS에 확정 폭 두 값이 있고 CI가 이를 확인하며, 정적 CI·GitHub Pages 배포가 성공해야 한다.
+- 실패 시 Gallery Pagination CSS·CI 범위에서만 최소 재수정한다.
+
+- CI 실행 추적: 버튼 폭과 CI 검증 파일을 포함한 최신 브랜치 커밋에서 PR 검증을 재실행한다.
