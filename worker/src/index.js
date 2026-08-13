@@ -21,30 +21,9 @@ async function route(request, env, ctx, visitorId) {
   const url = new URL(request.url);
   try {
     if (url.pathname === '/health') return json({ ok: true, service: 'yehyun-portfolio-api' });
-    if (url.pathname === '/api/auth/login' && request.method === 'POST') {
-      requireCsrfHeader(request);
-      return await loginAdmin(request, env, ctx);
-    }
-    if (url.pathname === '/api/auth/google/start' && request.method === 'GET') {
-      return await startFirebaseGoogleLogin(env);
-    }
-    if (url.pathname === '/api/admin/google/link/start' && request.method === 'POST') {
-      return startAdminGoogleLink(request, env);
-    }
-    if (url.pathname === '/oauth/google/login-callback' && request.method === 'GET') {
-      return await finishFirebaseGoogleLogin(request, env, ctx);
-    }
     if (url.pathname === '/api/auth/session' && request.method === 'GET') {
       const user = await optionalUser(request, env);
       return json({ user: user && { uid: user.claims.sub, role: user.role } });
-    }
-    if (url.pathname === '/api/auth/ticket' && request.method === 'POST') {
-      requireCsrfHeader(request);
-      return exchangeAuthTicket(request, env);
-    }
-    if (url.pathname === '/api/auth/logout' && request.method === 'POST') {
-      requireCsrfHeader(request);
-      return await logout(request, env);
     }
     if (url.pathname === '/api/admin/drive/start' && request.method === 'GET') return startGoogleDriveOAuth(request, env);
     if (url.pathname === '/oauth/google/callback' && request.method === 'GET') return finishGoogleDriveOAuth(request, env);
@@ -951,14 +930,9 @@ function requireCsrfHeader(request) {
 async function requireUser(request, env) {
   const token = getBearer(request);
   if (!token) throw httpError('AUTH_REQUIRED', '로그인이 필요합니다.', 401);
-  requireCsrfHeader(request);
-  const sessionId = await hashSessionToken(token);
-  const row = await env.DB.prepare('SELECT uid, role, expires_at FROM auth_sessions WHERE id = ?').bind(sessionId).first();
-  if (!row || Date.parse(row.expires_at) <= Date.now()) {
-    if (row) await env.DB.prepare('DELETE FROM auth_sessions WHERE id = ?').bind(sessionId).run();
-    throw httpError('AUTH_REQUIRED', '로그인이 만료되었습니다.', 401);
-  }
-  return { claims: { sub: row.uid }, role: row.role, sessionId };
+  if (request.method !== 'GET') requireCsrfHeader(request);
+  const claims = await verifyFirebaseToken(token, env);
+  return { claims, role: await isAdmin(claims, env) ? 'admin' : 'member' };
 }
 
 async function requireAdmin(request, env) {
