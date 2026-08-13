@@ -581,7 +581,27 @@ async function finishGoogleDriveOAuth(request, env) {
     VALUES ('primary', ?, ?, ?, ?, ?, ?)
     ON CONFLICT(id) DO UPDATE SET uid = excluded.uid, google_subject = excluded.google_subject, refresh_token_ciphertext = excluded.refresh_token_ciphertext, refresh_token_iv = excluded.refresh_token_iv, updated_at = excluded.updated_at`)
     .bind(stateRow.uid, googleSubject, encrypted.ciphertext, encrypted.iv, now, now).run();
+  try {
+    const accessToken = await getDriveAccessToken(env);
+    const rootId = await getOrCreateDriveFolder(accessToken, 'Portfolio-con');
+    await getOrCreateDriveFolder(accessToken, 'Backups', rootId);
+  } catch (error) {
+    await env.DB.prepare('DELETE FROM google_drive_connections WHERE id = ?').bind('primary').run();
+    return oauthRedirect(env, driveErrorFragment(error.code));
+  }
   return oauthRedirect(env, 'admin-drive-connected');
+}
+
+function driveErrorFragment(code) {
+  const fragments = {
+    AUTH_UPSTREAM_TIMEOUT: 'admin-drive-timeout',
+    DRIVE_FOLDER_READ_FAILED: 'admin-drive-folder-read-error',
+    DRIVE_FOLDER_CREATE_FAILED: 'admin-drive-folder-create-error',
+    DRIVE_AUTH_FAILED: 'admin-drive-auth-error',
+    DRIVE_NOT_CONFIGURED: 'admin-drive-secret-error',
+    SECRET_CONFIG_INVALID: 'admin-drive-secret-error',
+  };
+  return fragments[code] || 'admin-drive-error';
 }
 
 function firebaseRequestUri(env) {
@@ -1060,12 +1080,10 @@ async function finishFirebaseGoogleLogin(request, env, ctx) {
 
 async function finishFirebaseGoogleLink(request, env, stateRow, code) {
   const expired = Date.now() - Date.parse(stateRow.created_at) > 10 * 60 * 1000;
-  const sessionToken = readCookie(request, 'portfolio_admin_session');
-  const sessionId = sessionToken ? await hashSessionToken(sessionToken) : '';
   await env.DB.prepare('DELETE FROM firebase_google_link_states WHERE state = ?').bind(stateRow.state).run();
-  if (expired || sessionId !== stateRow.session_id) return oauthRedirect(env, 'admin-google-link-expired');
+  if (expired) return oauthRedirect(env, 'admin-google-link-expired');
 
-  const session = await env.DB.prepare('SELECT uid, refresh_token_ciphertext, refresh_token_iv FROM auth_sessions WHERE id = ?').bind(sessionId).first();
+  const session = await env.DB.prepare('SELECT uid, refresh_token_ciphertext, refresh_token_iv FROM auth_sessions WHERE id = ?').bind(stateRow.session_id).first();
   if (!session || session.uid !== stateRow.uid) return oauthRedirect(env, 'admin-google-link-expired');
 
   try {
@@ -1099,7 +1117,7 @@ async function finishFirebaseGoogleLink(request, env, stateRow, code) {
     if (!payload.idToken || !payload.refreshToken || payload.localId !== stateRow.uid) return oauthRedirect(env, 'admin-google-link-error');
     const encrypted = await encryptSecret(payload.refreshToken, env.SESSION_ENCRYPTION_KEY);
     await env.DB.prepare('UPDATE auth_sessions SET refresh_token_ciphertext = ?, refresh_token_iv = ?, updated_at = ? WHERE id = ?')
-      .bind(encrypted.ciphertext, encrypted.iv, new Date().toISOString(), sessionId).run();
+      .bind(encrypted.ciphertext, encrypted.iv, new Date().toISOString(), stateRow.session_id).run();
     return oauthRedirect(env, 'admin-google-link-success');
   } catch (error) {
     return oauthRedirect(env, googleErrorFragment(error.code).replace('admin-google-login-', 'admin-google-link-'));

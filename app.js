@@ -702,6 +702,15 @@ async function handleGoogleLoginCallback() {
     'admin-google-link-provider-disabled': 'Firebase Google Provider가 비활성화되어 있습니다.',
     'admin-google-link-timeout': 'Google 인증 서버 응답 시간이 초과되었습니다. 잠시 후 다시 시도해주세요.',
     'admin-google-link-error': 'Google 계정 연결에 실패했습니다. 다시 시도해주세요.',
+    'admin-drive-connected': 'Google Drive가 연결되고 백업 폴더가 준비되었습니다. 이제 수동 백업을 실행할 수 있습니다.',
+    'admin-drive-expired': 'Google Drive 연결 요청이 만료되었습니다. 다시 시도해주세요.',
+    'admin-drive-token-error': 'Google Drive 인증 교환에 실패했습니다. OAuth redirect 설정을 확인해주세요.',
+    'admin-drive-secret-error': 'Google Drive 서버 보안 설정을 확인해주세요.',
+    'admin-drive-auth-error': 'Google Drive 권한을 갱신하지 못했습니다. 다시 연결해주세요.',
+    'admin-drive-folder-read-error': 'Google Drive 백업 폴더를 확인하지 못했습니다. Drive API와 권한을 확인해주세요.',
+    'admin-drive-folder-create-error': 'Google Drive 백업 폴더를 만들지 못했습니다. Drive 권한을 다시 승인해주세요.',
+    'admin-drive-timeout': 'Google Drive 응답 시간이 초과되었습니다. 다시 시도해주세요.',
+    'admin-drive-error': 'Google Drive 연결을 완료하지 못했습니다. 다시 시도해주세요.',
     'admin-google-login-oauth-error': 'Google OAuth 교환에 실패했습니다. Redirect URI와 OAuth Client 설정을 확인해주세요.',
     'admin-google-login-provider-error': 'Firebase Google 인증에 실패했습니다. Google Provider 설정을 확인해주세요.',
     'admin-google-login-provider-disabled': 'Firebase Google Provider가 비활성화되어 있습니다.',
@@ -715,9 +724,10 @@ async function handleGoogleLoginCallback() {
   };
   if (!messages[result]) return;
   const isLinkResult = result.startsWith('admin-google-link-');
-  const status = isLinkResult ? googleLinkStatus : result.startsWith('admin-') ? adminLoginStatus : memberLoginStatus;
+  const isDriveResult = result.startsWith('admin-drive-');
+  const status = isLinkResult ? googleLinkStatus : isDriveResult ? driveConnectionStatus : result.startsWith('admin-') ? adminLoginStatus : memberLoginStatus;
   status.textContent = messages[result];
-  if (isLinkResult) openModal(settingsModal);
+  if (isLinkResult || isDriveResult) openModal(settingsModal);
   else openModal(result.startsWith('admin-') ? adminLoginModal : memberLoginModal);
   window.history.replaceState(null, '', window.location.pathname + window.location.search);
 }

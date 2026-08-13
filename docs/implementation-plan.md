@@ -1056,3 +1056,26 @@ CORS 오류가 남으면 Network의 OPTIONS 응답에서 allow-origin, allow-hea
 2. 권한: Member admin endpoint는 403, allowlist 삭제 후 Admin endpoint는 403, 만료·logout은 401이다.
 3. 검증·배포: drill static check, main Worker/Pages deploy 성공 뒤 이메일 로그인 화면을 재검증한다.
 4. 실패 시 Network에서 login 응답과 session 응답을 분리해 확인하고 실패 단계만 최소 수정한다. CORS·origin·Secret·Firebase 구성을 완화하거나 공개하지 않는다.
+
+
+## 37. 2026-08-13 Google provider 연결 callback 및 Drive 준비 상태 정정
+
+### 확인 결과
+
+- Cloudflare Worker의 GOOGLE_CLIENT_ID와 GOOGLE_CLIENT_SECRET은 Firebase project ID `yehyun-portfolio`에 속한 첫 번째 Google Cloud 프로젝트와 일치한다는 운영자 확인을 받았다. 프로젝트 ID `yehyun-portfolio-505304`는 Worker Secret·공개 설정에서 참조되지 않는다.
+- Google provider 연결은 시작 시 Bearer 세션 hash를 state에 저장하지만, callback에서 이미 제거한 legacy cookie를 읽어 동일성을 비교한다. OAuth redirect에는 browser Authorization header가 없으므로 callback은 항상 만료처럼 처리된다.
+- Drive OAuth 연결은 token 저장만 성공해도 “연결됨”을 표시한다. 현재 폴더 생성은 첫 백업에서만 일어나므로 연결 직후 Drive에 폴더가 없는 것은 코드 동작상 정상이나 화면 의미가 불명확하다.
+
+### 수정 계획
+
+1. Google provider callback은 one-time OAuth state에 이미 묶인 D1 session hash를 직접 사용한다. state 삭제, 만료, session 존재, UID 일치, D1 allowlist를 검증한다. legacy cookie 참조는 제거한다.
+2. Drive OAuth callback은 token 저장 뒤 앱 소유 `Portfolio-con/Backups` 폴더를 즉시 준비한다. 폴더 준비 실패는 연결 성공으로 표시하지 않고 기존 Drive connection을 되돌린다.
+3. 화면은 Drive 상태를 “연결됨·백업 폴더 준비됨”으로 표시하고, 수동 백업은 날짜별 파일 생성 단계로 안내한다.
+4. OAuth 오류는 access denied, redirect mismatch, Drive API/권한, 만료, provider in-use를 안전한 한국어 상태로 구분한다.
+5. 외부 console 정리: 실제 OAuth project가 첫 번째임은 확인됐지만 삭제는 Google Cloud Console에서 운영자가 최종 수행한다. 두 번째 프로젝트에 다른 서비스가 없는지 마지막 확인 후에만 삭제한다.
+
+### Gate와 재수정 Loop
+
+- Provider link: 이메일 Admin 로그인 -> Google 계정 연결 -> callback success -> 로그아웃 -> Google Admin 로그인.
+- Drive: Drive 연결 -> `Portfolio-con/Backups` 생성 확인 -> 수동 백업 -> 날짜 폴더와 JSON 파일 생성 확인.
+- 실패 시 callback fragment 또는 Drive status의 안전한 code만 확인하고 해당 단계부터 반복한다. raw OAuth state, UID, token, credential, secret은 기록하지 않는다.
