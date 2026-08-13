@@ -666,10 +666,10 @@ button:focus-visible { outline: 2px solid var(--ink); outline-offset: 4px; }
   border-radius: 90px;
   background: #c8bcff;
 }
-.gallery-swiper .swiper-slide:nth-child(2) { background: #ccf1ff; }
-.gallery-swiper .swiper-slide:nth-child(3) { background: #d9d9d9; }
-.gallery-swiper .swiper-slide:nth-child(4) { background: #b6c9ff; }
-.gallery-swiper .swiper-slide:nth-child(5) { background: #f3a3ac; }
+.gallery-slide--cyan { background: #ccf1ff !important; }
+.gallery-slide--main { background: #d9d9d9 !important; }
+.gallery-slide--blue { background: #b6c9ff !important; }
+.gallery-slide--pink { background: #f3a3ac !important; }
 .gallery-corner {
   position: absolute;
   z-index: 4;
