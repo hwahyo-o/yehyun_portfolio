@@ -51,9 +51,9 @@ jobs:
           grep -q 'gallery-pagination-active.png' index.html
           grep -q 'mail.google.com/mail/?view=cm&amp;fs=1&amp;to=ajas03974%40gmail.com' index.html
           grep -q 'target="_blank" rel="noopener noreferrer"' index.html
-          grep -q 'top: 620px' styles.css
-          grep -q 'top: 483px' styles.css
-          grep -q 'top: 366px' styles.css
+          grep -q 'top: 650px' styles.css
+          grep -q 'top: 513px' styles.css
+          grep -q 'top: 396px' styles.css
           grep -q 'width: 15px' styles.css
           grep -q 'width: 35px' styles.css
           grep -q 'background: #FAF7E9' styles.css
