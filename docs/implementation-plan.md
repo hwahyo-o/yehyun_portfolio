@@ -1218,3 +1218,35 @@ Firebase Authentication은 브라우저 Firebase Web SDK가 담당한다. Cloudf
 ### 실패 Loop와 운영 설정
 
 Firebase config가 누락되면 UI는 로그인 요청을 보내지 않고 설정 안내만 표시한다. Worker 오류는 Google Provider·Drive와 분리해 해당 route만 수정한다. 배포 후 운영자는 Firebase Console의 웹 앱 config를 config.js에 publicFirebaseConfig로 입력하고, Authorized domains에 GitHub Pages 도메인이 있는지 확인한다. API key, OAuth secret, token, UID, password는 문서·로그·채팅에 기록하지 않는다.
+
+
+## 44. 2026-08-13 Firebase SDK 시작 오류 및 CSP 수정
+
+### 관찰과 원인
+
+- 배포된 app.js의 관리자 동작 선언에서 async와 function 사이에 줄바꿈이 있어 JavaScript가 async를 식별자로 실행한다. 이 ReferenceError가 앱 시작을 중단해 로딩 화면 해제까지 도달하지 못한다.
+- Firebase CDN은 script-src에만 허용되어 있고 connect-src에는 빠져 있다. 일부 브라우저의 Firebase module 연결이 CSP 경고·차단을 일으킨다.
+- Firebase 공개 웹 구성값의 존재 여부와 위 두 오류는 별개다.
+
+### 계층별 수정 범위
+
+- 화면: 초기화 실패 시 영구 로딩 대신 안전한 오류 안내와 새로고침 동작을 표시한다.
+- 처리: async function 선언을 단일 문법 단위로 복구한다.
+- 핵심 규칙: 인증 SDK나 관리자 API의 실패가 공개 포트폴리오의 기본 화면을 막지 않는다.
+- 저장·외부 서비스: CSP connect-src에 Firebase CDN origin만 추가한다.
+- 의존성·시작: Firebase SDK와 app module의 시작 실패를 분리 처리한다.
+
+### Process Phase와 Gate
+
+1. 문서 선커밋. Gate: 이 원인·범위·검증 계획이 구현 전 기록되고 비밀값이 없다.
+2. 문법 및 시작 경계 수정. Gate: app.js가 ES module 구문 검사에 성공하며 단독 async 식별자가 없다.
+3. CSP 수정. Gate: gstatic 이외의 새 외부 origin을 허용하지 않는다.
+4. 실패 UI. Gate: Firebase 초기화 실패가 있어도 로딩 레이어가 해제되고 공개 화면은 표시된다.
+5. PR·배포. Gate: Actions 정적 검증, Pages 배포 후 브라우저에서 async ReferenceError와 Firebase CDN CSP 차단이 없다.
+
+### 실패 시 재수정 Loop 및 검증
+
+- 문법 오류는 해당 선언만 수정한 뒤 module 구문 검사를 다시 실행한다.
+- CSP 오류는 콘솔의 차단 origin만 확인해 최소 allow-list로 수정한다.
+- Firebase 오류는 config, Authorized domains, provider 설정 중 발생 계층만 점검한다.
+- 정적 검증에는 app module 검사, CSP origin 검사, 로딩 해제 핸들러 존재 검사를 포함한다. 브라우저 검증은 CI 성공과 별도로 기록한다.
