@@ -34,7 +34,9 @@ jobs:
           grep -q 'integrity="sha384-sRIl4kxILFvY47J16cr9ZwB07vP4J8+LH7qKQnuqkuIAvNWLzeN8tE5YBujZqJLB"' index.html
           grep -q "type=\"module\" src=\"./app.js\"" index.html
           grep -q "import('./firebase-auth.js')" app.js
-          ! grep -Eq '^async[[:space:]]*
+          ! grep -x 'async' app.js
+          grep -q 'portfolio_start_failed' app.js
+          grep -q 'https://www.gstatic.com' index.html
           grep -q 'signInWithPopup' firebase-auth.js
           grep -q 'linkWithPopup' firebase-auth.js
           grep -q 'firebase: null' config.js
