@@ -1,0 +1,38 @@
+name: Apply member guestbook migration
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirmation:
+        description: "Type APPLY_MEMBER_GUESTBOOK_MIGRATION to remove password guestbook fields"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: apply-member-guestbook-migration
+  cancel-in-progress: false
+
+jobs:
+  apply:
+    if: inputs.confirmation == 'APPLY_MEMBER_GUESTBOOK_MIGRATION'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Apply one-time member guestbook migration
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          wranglerVersion: "4.121.0"
+          command: d1 execute yehyun-portfolio --remote --file=worker/schema/007_member_guestbook.sql
+      - name: Verify UID ownership columns
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          wranglerVersion: "4.121.0"
+          command: d1 execute yehyun-portfolio --remote --command="PRAGMA table_info(guestbook_comments); PRAGMA table_info(conversations);"
