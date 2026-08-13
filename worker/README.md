@@ -228,3 +228,16 @@ When an administrator already exists as a Firebase email/password user, do not d
 5. Sign out and use the administrator Google login button once to confirm that it opens the same administrator role.
 
 The one-time link state is bound to the current HttpOnly administrator session hash and expires after ten minutes. The Worker rejects an expired state, a changed session, a non-admin UID, or a Google identity already linked to another Firebase user. No UID, email, OAuth code, refresh token, API key, or client secret is exposed in code or documentation. The worker deployment applies schema/008_firebase_google_link.sql automatically; do not run the destructive member-guestbook migration again.
+
+
+## Cookie-free authentication sessions
+
+The site and API use different hosted domains, so browser third-party-cookie restrictions can prevent an HttpOnly cross-site session from returning after an otherwise successful login. Authentication therefore uses an opaque bearer session:
+
+- The Worker authenticates email/password or Google with Firebase and looks up the Firebase UID in private D1 admin_roles.
+- Email/password produces an administrator session only when the UID is allowlisted. Google produces Admin for an allowlisted UID and Member otherwise.
+- The Worker returns an opaque session token only after authentication. The browser keeps it in sessionStorage, sends it as an Authorization header, and clears it on logout or failure.
+- A Google callback carries only a one-minute, single-use fragment ticket. The app immediately exchanges it for the session token and removes the fragment.
+- D1 stores only token hashes and encrypted Firebase refresh tokens. No raw bearer token, UID list, credential, or provider secret is committed.
+
+This design does not rely on cross-site authentication cookies and remains compatible with the free hosting arrangement. Session tokens expire after twelve hours. A custom same-site domain can be added later without changing roles or Firebase identity rules.

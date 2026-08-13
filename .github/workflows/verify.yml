@@ -43,8 +43,12 @@ jobs:
           test -f worker/schema/006_visitor_sessions.sql
           test -f worker/schema/007_member_guestbook.sql
           test -f worker/schema/008_firebase_google_link.sql
+          test -f worker/schema/009_bearer_auth_sessions.sql
           grep -q '/api/auth/google/start' worker/src/index.js
           grep -q '/api/auth/google/link/start' worker/src/index.js
+          grep -q '/api/auth/ticket' worker/src/index.js
+          grep -q 'auth_sessions' worker/src/index.js
+          grep -q 'Authorization: .Bearer ' app.js
           grep -q 'accounts:update' worker/src/index.js
           grep -q 'activity_events' worker/src/index.js
           grep -Fq 'crons = ["0 11 * * *"]' worker/wrangler.toml

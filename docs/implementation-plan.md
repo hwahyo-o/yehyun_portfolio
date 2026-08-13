@@ -979,3 +979,41 @@ Gate: no-cookie 초기 요청 200/null, 유효 관리자 세션 200/user, 잘못
 ### 실패 재수정 Loop 및 검증 절차
 
 OAuth 교환 오류면 redirect URI와 OAuth client의 운영 설정을 확인한다. Firebase가 이미 연결됨을 반환하면 해당 Google identity가 다른 Firebase UID에 연결된 상태이므로 그 계정을 삭제·재생성하지 않고 Firebase Console에서 provider 소유 관계를 먼저 정리한다. state 만료면 기존 이메일/비밀번호로 다시 로그인해 새 연결을 시작한다. code, UID, 이메일, API key, client secret, refresh token은 로그·문서·소스에 남기지 않는다.
+
+
+## 34. 2026-08-13 무료 환경용 인증 세션 재구성 승인 계획
+
+### 결정
+
+GitHub Pages와 workers.dev의 교차 사이트 HttpOnly 쿠키는 브라우저의 third-party cookie 정책에 의해 로그인 직후 세션 확인이 실패할 수 있다. 따라서 인증 쿠키에 의존하지 않는다. Firebase 웹 SDK와 공개 설정도 추가하지 않고, Worker가 Firebase 인증을 수행한 뒤 짧은 수명의 불투명 세션 토큰을 JSON 또는 일회성 callback ticket으로 전달한다. 브라우저는 token을 sessionStorage에만 보관하고 Authorization header로 Worker에 보낸다.
+
+기존 정책을 유지한다. 이메일/비밀번호는 관리자 전용이고, UID가 private D1 admin_roles에 없으면 세션을 발급하지 않는다. Google 로그인은 allowlist UID면 Admin, 그 외 정상 Firebase 사용자는 Member가 된다. 비로그인은 Guest다.
+
+### 문제별 수정 계획
+
+1. 쿠키 기반 admin_sessions / visitor_sessions 분기를 단일 auth_sessions 테이블과 Bearer token 검증으로 교체한다.
+2. 이메일 로그인 성공 뒤 Firebase UID와 D1 allowlist를 같은 요청 안에서 확인하고 Admin 세션만 반환한다.
+3. Google callback은 URL fragment의 단기 일회성 ticket을 사용해 브라우저가 session token을 안전하게 교환하도록 한다. fragment/ticket은 즉시 제거한다.
+4. Google Provider 연결도 현재 관리자 Bearer 세션에 묶어 동일 Firebase UID에 연결한다.
+5. 화면은 로그인, UID 권한 판정, 세션 교환의 실패를 각기 표시하며 실패 뒤 버튼 상태를 항상 복구한다.
+6. 기존 cookie session과 Google link state를 폐기하는 additive D1 migration을 새 배포에서 한 번만 적용한다.
+
+### 계층별 범위
+
+- 화면: sessionStorage의 메모리형 세션 보관, callback ticket 교환, 단계별 상태 문구, 로그아웃 시 제거.
+- 처리: Worker의 Firebase sign-in / token verification / D1 role lookup / opaque session creation.
+- 핵심 규칙: Guest, Member, Admin 역할은 UID allowlist만으로 결정한다. 이메일 주소 비교는 사용하지 않는다.
+- 저장·외부 서비스: D1은 암호화된 Firebase refresh token과 hash된 opaque session ID만 저장한다. Firebase는 신원 확인만 담당한다.
+- 의존성·시작: 외부 browser SDK와 Secret 노출은 없다. 초기 시작은 sessionStorage token이 있을 때만 session endpoint를 호출한다.
+
+### Process Phase와 Gate
+
+1. 문서와 schema: 계획을 먼저 commit하고 auth_sessions / callback ticket schema를 추가한다. Gate: session raw token은 D1에 평문으로 저장하지 않는다.
+2. Worker: 단일 requireUser / requireAdmin을 Bearer token 기반으로 교체한다. Gate: no-token 401, Member의 admin API 403, Admin 성공.
+3. 화면: token 저장·제거와 Google callback ticket 교환을 연결한다. Gate: 실패 시 로그인 중 상태가 남지 않고 안내 문구가 보인다.
+4. Google link: current session state와 UID를 검증한다. Gate: link 후 UID가 동일하고 재로그인으로 Admin을 확인한다.
+5. 검증·배포: drill static checks, main Worker schema/deploy, Pages deploy를 통과한다. Gate: 이메일 Admin, Google Member, Google Admin, Guest 경계를 운영 화면에서 확인한다.
+
+### 실패 재수정 Loop
+
+각 실패는 login, role lookup, session exchange, provider link 중 한 단계 코드로만 분류한다. 그 단계의 안전한 오류 code와 Network 상태를 확인한 뒤 최소 수정 후 같은 Gate부터 반복한다. email, UID, password, API key, OAuth code, token, client secret은 코드·문서·로그에 기록하지 않는다.
