@@ -2,7 +2,7 @@ name: Verify static portfolio
 
 on:
   push:
-    branches: [drill]
+    branches: [drill, drill-oauth-rebuild]
   pull_request:
     branches: [main]
 
@@ -45,19 +45,23 @@ jobs:
           test -f worker/schema/008_firebase_google_link.sql
           test -f worker/schema/009_bearer_auth_sessions.sql
           test -f worker/schema/010_drive_storage_root.sql
+          test -f worker/schema/011_admin_google_setup.sql
           grep -q '/api/auth/google/start' worker/src/index.js
-          grep -q '/api/auth/google/link/start' worker/src/index.js
+          grep -q '/api/admin/google/setup/start' worker/src/index.js
           grep -q '/api/auth/ticket' worker/src/index.js
           grep -q 'auth_sessions' worker/src/index.js
           grep -q "SELECT uid, role, expires_at FROM auth_sessions" worker/src/index.js
           grep -q 'Authorization: .Bearer ' app.js
           grep -q 'Access-Control-Allow-Headers.*, Authorization\|Authorization, Content-Type' worker/src/index.js
           grep -q 'accounts:update' worker/src/index.js
-          grep -q "stateRow.session_id" worker/src/index.js
+          grep -q 'admin_google_setup_states' worker/src/index.js
+          grep -q 'firebase_id_token_ciphertext' worker/src/index.js
+          grep -q 'googleSetupAuthorizationUrl' worker/src/index.js
           grep -q "getOrCreateDriveFolder(accessToken, 'Backups', rootId)" worker/src/index.js
           grep -q 'drive_storage_roots' worker/src/index.js
           grep -q 'googleLinkErrorFragment' worker/src/index.js
-          grep -q "admin-drive-folder-create-error" app.js
+          grep -q "admin-google-setup-drive-folder-create-error" app.js
+          grep -q "google-setup-form" index.html
           grep -q 'activity_events' worker/src/index.js
           grep -Fq 'crons = ["0 11 * * *"]' worker/wrangler.toml
           grep -q '/oauth/google/login-callback' worker/src/index.js
