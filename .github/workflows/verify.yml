@@ -36,7 +36,14 @@ jobs:
           grep -q "import('./firebase-auth.js')" app.js
           ! grep -x 'async' app.js
           grep -q 'portfolio_start_failed' app.js
-          grep -q "script-src 'self' https://www.gstatic.com https://apis.google.com" index.html
+          grep -q "script-src 'self' https://cdn.jsdelivr.net https://www.gstatic.com https://apis.google.com" index.html
+          grep -q 'swiper@11/swiper-bundle.min.css' index.html
+          grep -q 'swiper@11/swiper-bundle.min.js' index.html
+          grep -q 'class="swiper gallery-swiper"' index.html
+          grep -q 'class="swiper-wrapper"' index.html
+          grep -q 'new window.Swiper' app.js
+          grep -q 'delay: 800' app.js
+          ! grep -q 'gallery-track\|startGalleryLoop' app.js
           grep -q "getBearer(request) ? await requireUser(request, env) : null" worker/src/index.js
           grep -q "verifyAuthSession({ reportError: true })" app.js
           grep -q 'signInWithEmailAndPassword' firebase-auth.js
