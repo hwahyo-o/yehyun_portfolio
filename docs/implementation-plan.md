@@ -1407,3 +1407,51 @@ Drive OAuth는 Google consent 화면과 authorization code 반환까지 성공�
 - 예상 변경 파일: `index.html`, `styles.css`, `app.js`, `.github/workflows/verify.yml`, 본 문서.
 - 기대하는 런타임 의존성: SHA-384 SRI로 검증되는 고정 버전 Swiper 11.2.10 browser bundle 1개와 stylesheet 1개. 별도 빌드 도구·서버·DB 마이그레이션은 추가하지 않는다.
 - 롤백은 해당 갤러리 변경 커밋을 되돌리면 가능하며, 데이터·외부 서비스 상태를 변경하지 않는다.
+
+
+---
+
+## 2026-08-13 Gallery Hero Figma 프로토타입 정합화
+
+### 기준과 범위
+
+- 설계 기준: Figma 파일 `uWvPfF4BWYEgniRXAqLvfT`, 노드 `1:181`(배너 예시).
+- 대상: `index.html > .gallery-hero` 및 이 영역에 직접 연결된 CSS·Swiper 초기화 코드.
+- GNB, Worker, Firebase, D1, Google Drive, 기존 콘텐츠 API 및 인증 처리에는 변경을 가하지 않는다.
+- 1920px 기준 중앙 배너 카드 폭은 1064px, 높이는 667px, 카드 간격은 100px, 카드 반경은 90px으로 구현한다.
+- 중앙의 코너 프레임, Gallery 타이틀, 페이지네이션은 슬라이드 이동과 독립된 고정 레이어다.
+
+### 원본 자산과 역할
+
+| 파일 | 역할 | 사용 규칙 |
+| --- | --- | --- |
+| `public/gallery-title.png` | 하단 Gallery 타이틀 그래픽 | CSS 텍스트를 대체한다. 이미지의 비율을 보존한다. |
+| `public/gallery-corner-frame.png` | 코너 프레임 | 동일 원본을 네 방향으로 회전해 배치한다. SVG·CSS로 재작성하지 않는다. |
+| `public/gallery-pagination-active.png` | 현재 중앙 배너의 active 표시 | 활성 페이지네이션의 중앙 장식으로만 사용한다. |
+| `public/yehyun_logo.png` 등 기존 자산 | 기존 사이트 UI | 변경하지 않는다. |
+
+### Process Phase 및 Gate
+
+1. **문서·자산 Gate**
+   - 위 원본 세 파일이 `drill-figma-assets`의 `public/`에 원본 blob으로 커밋되어 있고, 자산 역할·범위·검증 절차가 본 문서에 기록되어야 한다.
+2. **구조 Gate**
+   - Swiper는 `slidesPerView: 'auto'`, `centeredSlides: true`, `spaceBetween: 100`, `loop: true`, 800ms autoplay를 사용한다.
+   - 임시 콘텐츠 슬라이드는 Figma의 다섯 페이지네이션과 맞춰 5개로 구성한다.
+   - 카드 이동 레이어와 고정 장식 레이어의 책임이 분리되어야 한다.
+3. **상태 Gate**
+   - 페이지네이션은 Swiper의 `realIndex`에 따라 활성 상태를 갱신한다.
+   - 활성 표시에는 `gallery-pagination-active.png`만 사용하며, 이전의 손·폰 CSS 도형은 제거한다.
+   - reduced-motion 사용자는 자동재생하지 않는다.
+4. **표시 Gate**
+   - 1920px 기준으로 중앙 카드, 양옆 preview, 프레임, 타이틀, 페이지네이션의 겹침 관계가 Figma와 일치한다.
+   - 모바일에서는 장식·카드가 잘리지 않고 최소 터치 영역을 유지한다.
+5. **검증·배포 Gate**
+   - 구조·SRI·CSP·문법을 CI에서 검증하고, 데스크톱·모바일 렌더와 자동 전환을 확인한다.
+   - 검증 실패 시 원인을 기록하고, 실패한 Gate부터 최소 변경으로 반복한다.
+
+### 협업 인계 및 보안
+
+- 새 의존성은 추가하지 않는다. 이미 고정·SRI 검증된 Swiper 11.2.10을 유지한다.
+- Figma 임시 자산 URL은 저장소 코드에 넣지 않는다. 커밋된 `public/` 원본만 참조한다.
+- API 키, 토큰, OAuth secret, 개인 식별값은 이 문서·커밋·검증 로그에 기록하지 않는다.
+- 예상 변경 파일: `docs/implementation-plan.md`, `index.html`, `styles.css`, `app.js`, `.github/workflows/verify.yml`, `public/gallery-*.png`.
