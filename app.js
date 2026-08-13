@@ -1,4 +1,6 @@
-import './firebase-auth.js';
+const firebaseClientPromise = import('./firebase-auth.js')
+  .then(() => window.portfolioFirebaseReady)
+  .catch(() => null);
 
 const fonts = [
   'Wanted Sans',
@@ -213,7 +215,7 @@ function initTheme() {
 }
 
 async function firebaseClient() {
-  return window.portfolioFirebaseReady || null;
+  return firebaseClientPromise;
 }
 
 async function authHeaders() {
@@ -682,8 +684,7 @@ function bindAdminPasswordActions() {
   });
 }
 
-async 
-function bindAdminActions() {
+async function bindAdminActions() {
   adminPostForm?.addEventListener('submit', async (event) => {
     event.preventDefault();
     if (!state.isAdmin) return;
@@ -887,14 +888,18 @@ window.addEventListener('hashchange', updatePage);
 window.addEventListener('pageshow', resetScroll);
 window.addEventListener('load', resetScroll);
 
-updatePage();
-initTheme();
-bindNameShuffle();
-bindCommunityActions();
-bindAdminPasswordActions();
-bindAdminActions();
-setupAuthSession().finally(loadCommunity);
-startGalleryLoop();
+try {
+  updatePage();
+  initTheme();
+  bindNameShuffle();
+  bindCommunityActions();
+  bindAdminPasswordActions();
+  bindAdminActions();
+  setupAuthSession().catch(() => {}).finally(loadCommunity);
+  startGalleryLoop();
+} catch (error) {
+  console.error('portfolio_start_failed');
+}
 
 const loadingInterval = window.setInterval(shuffleLoadingFont, 300);
 window.setTimeout(() => {
