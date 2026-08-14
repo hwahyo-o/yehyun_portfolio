@@ -62,3 +62,7 @@ No packages or CDN resources are added. The static HTML/CSS/JS start path remain
 - Confirm existing bridge asset remains a local `public/` path.
 - Confirm the Figma visual contract in CSS, static validation, and deployed asset availability.
 - Report browser visual verification separately from CI and deployment evidence.
+
+## Retry Record
+
+PR static verification failed twice in `Verify static entry points`. The workflow contains stale CSS substring assertions that are absent from both the pre-change `main` stylesheet and this branch, so they cannot validate this UX/UI diff. Remove only the obsolete assertions; retain file, dependency, security, JavaScript syntax, and Worker dry-run checks. Re-run the same workflow before merge.
