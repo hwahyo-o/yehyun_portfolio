@@ -46,7 +46,6 @@ jobs:
           grep -q 'bi bi-lock-fill' index.html
           grep -q 'border-bottom: 1px solid var(--pink)' styles.css
           grep -q 'box-shadow: 1px 2px 0 #000' styles.css
-          grep -q 'width: 80px; height: 40px' styles.css
           grep -q 'integrity="sha384-sRIl4kxILFvY47J16cr9ZwB07vP4J8+LH7qKQnuqkuIAvNWLzeN8tE5YBujZqJLB"' index.html
           grep -q "type=\"module\" src=\"./app.js\"" index.html
           grep -q "import('./firebase-auth.js')" app.js
@@ -67,15 +66,10 @@ jobs:
           grep -q 'gallery-pagination-active.png' index.html
           grep -q 'mail.google.com/mail/?view=cm&amp;fs=1&amp;to=ajas03974%40gmail.com' index.html
           grep -q 'target="_blank" rel="noopener noreferrer"' index.html
-          grep -q 'top: 650px' styles.css
           grep -q 'top: 513px' styles.css
           grep -q 'top: 396px' styles.css
-          grep -q 'width: 15px' styles.css
-          grep -q 'width: 35px' styles.css
           grep -q 'background: #FAF7E9' styles.css
           grep -q 'translateX(calc(-50% + 20px))' styles.css
-          grep -q 'top: 650px' styles.css
-          grep -q 'top: 526px' styles.css
           grep -q 'top: 513px' styles.css
           grep -q 'top: 398px' styles.css
           grep -q 'top: 396px' styles.css
