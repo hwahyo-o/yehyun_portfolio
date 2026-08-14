@@ -1401,8 +1401,7 @@ body[data-theme="dark"] .admin-login-form input {
   font-size: .95rem;
 }
 .ux-section .work-rail-featured {
-  grid-template-columns: minmax(0, 858px) minmax(300px, 631px);
-  max-width: 1517px;
+  grid-template-columns: minmax(740px, 780px) minmax(0px, 395px);
   gap: 28px;
   align-items: start;
 }
