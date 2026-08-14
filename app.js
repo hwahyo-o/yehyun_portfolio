@@ -37,6 +37,23 @@ const galleryPaginationButtons = document.querySelectorAll('[data-gallery-page]'
 const reducedMotionQuery = window.matchMedia('(prefers-reduced-motion: reduce)');
 const apiBase = String(window.PORTFOLIO_CONFIG?.apiBase || '').replace(/\/$/, '');
 const themeToggle = document.querySelector('#theme-toggle');
+const gnb = document.querySelector('.gnb');
+const gnbNav = document.querySelector('#gnb-nav');
+const gnbMenuToggle = document.querySelector('.gnb-menu-toggle');
+
+function closeGnbMenu() {
+  if (!gnbNav || !gnbMenuToggle) return;
+  gnbNav.classList.remove('is-open');
+  gnbMenuToggle.setAttribute('aria-expanded', 'false');
+  gnbMenuToggle.setAttribute('aria-label', '메뉴 열기');
+}
+
+function toggleGnbMenu() {
+  if (!gnbNav || !gnbMenuToggle) return;
+  const isOpen = gnbNav.classList.toggle('is-open');
+  gnbMenuToggle.setAttribute('aria-expanded', String(isOpen));
+  gnbMenuToggle.setAttribute('aria-label', isOpen ? '메뉴 닫기' : '메뉴 열기');
+}
 const updateList = document.querySelector('#update-list');
 const updateStatus = document.querySelector('#update-status');
 const guestbookList = document.querySelector('#guestbook-list');
@@ -803,19 +820,24 @@ function bindCommunityActions() {
 }
 
 document.addEventListener('click', (event) => {
+  if (!gnb?.contains(event.target)) closeGnbMenu();
+
   const routeTarget = event.target.closest('[data-route]');
   if (routeTarget) {
+    closeGnbMenu();
     navigate(routeTarget.dataset.route);
     return;
   }
 
   const scrollTarget = event.target.closest('[data-scroll-target]');
   if (scrollTarget) {
+    closeGnbMenu();
     document.querySelector(`#${scrollTarget.dataset.scrollTarget}`)?.scrollIntoView({ behavior: reducedMotionQuery.matches ? 'auto' : 'smooth' });
     return;
   }
 
   const action = event.target.closest('[data-action]')?.dataset.action;
+  if (action === 'toggle-nav') toggleGnbMenu();
   if (action === 'top') resetScroll();
   if (action === 'theme') applyTheme(document.body.dataset.theme === 'dark' ? 'light' : 'dark');
   if (action === 'open-chat' && requireMemberAction('chat')) {
@@ -946,3 +968,8 @@ window.setTimeout(() => {
   window.clearInterval(loadingInterval);
   completeLoading();
 }, 3000);
+
+
+document.addEventListener('keydown', (event) => {
+  if (event.key === 'Escape') closeGnbMenu();
+});
