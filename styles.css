@@ -635,14 +635,14 @@ button:focus-visible { outline: 2px solid var(--ink); outline-offset: 4px; }
 /* Figma Gallery Hero */
 .gallery-hero {
   display: block;
-  min-height: 950px;
+  min-height: 650px;
   padding: 0;
   overflow: hidden;
   background: #FAF7E9;
 }
 .hero-frame {
   width: 100%;
-  height: 950px;
+  height: 720px;
   padding: 0;
   text-align: center;
 }
@@ -656,10 +656,10 @@ button:focus-visible { outline: 2px solid var(--ink); outline-offset: 4px; }
 }
 .gallery-stage {
   position: absolute;
-  top: 63px;
+  top: 24px;
   left: 0;
   width: 100%;
-  height: 855px;
+  height: 720px;
 }
 .hero-media-slot {
   position: absolute;
@@ -703,10 +703,9 @@ button:focus-visible { outline: 2px solid var(--ink); outline-offset: 4px; }
 .hero-frame .gallery-title-decoration {
   position: absolute;
   z-index: 5;
-  top: 540px;
+  top: 508px;
   left: 50%;
-  width: 630px;
-  height: 200px;
+  width: 520px;
   margin: 0;
   transform: translateX(calc(-50% + 20px));
 }
@@ -714,19 +713,19 @@ button:focus-visible { outline: 2px solid var(--ink); outline-offset: 4px; }
 .gallery-pagination {
   position: absolute;
   z-index: 6;
-  top: 416px;
+  top: 420px;
   left: 50%;
   display: flex;
   align-items: end;
   justify-content: center;
-  gap: 10px;
+  gap: 8px;
   width: 230px;
   height: 95px;
   transform: translateX(-50%);
 }
 .gallery-pagination-button {
   position: relative;
-  width: 15px;
+  width: 12px;
   height: 10px;
   padding: 0;
   border: 0;
@@ -734,7 +733,7 @@ button:focus-visible { outline: 2px solid var(--ink); outline-offset: 4px; }
   background: var(--ink);
 }
 .gallery-pagination-button.is-active {
-  width: 35px;
+  width: 32px;
   height: 15px;
 }
 .gallery-pagination-button img {
@@ -1364,13 +1363,14 @@ body[data-theme="dark"] .admin-login-form input {
 .ux-section {
   position: relative;
   overflow: hidden;
-  padding: 160px max(var(--page-gutter), calc((100vw - 1200px) / 2));
+  padding: 80px max(var(--page-gutter), calc((100vw - 1200px) / 2));
   background: #fff url("./public/uxui-bridge.png") no-repeat left bottom / min(43.16vw, 829px) auto;
 }
 .ux-section-heading {
   max-width: 1200px;
-  min-height: 112px;
-  margin-bottom: 28px;
+  min-height: 50px;
+  margin-top: 40px;
+  margin-bottom: 24px;
   align-items: end;
 }
 .ux-heading-copy { display: grid; gap: 0; }
@@ -1477,7 +1477,7 @@ body[data-theme="dark"] .admin-login-form input {
   }
   .ux-section .featured-work-card { min-height: 664px; }
   .ux-section .project-slot-large { min-height: 540px; }
-  .ux-section .featured-copy { min-height: 564px; }
+  .ux-section .featured-copy { min-height: 420px; }
   .ux-section .featured-copy strong { padding-top: 390px; }
   .ux-section .rail-side-slots { min-height: 564px; }
 }
