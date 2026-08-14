@@ -1525,6 +1525,10 @@ body[data-theme="dark"] .admin-login-form input {
 @media (max-width: 835px) {
   .gnb {
     position: sticky;
+    display: flex;
+    box-sizing: border-box;
+    width: 100%;
+    max-width: 100%;
     flex-wrap: nowrap;
     align-items: center;
     justify-content: flex-start;
@@ -1564,7 +1568,4 @@ body[data-theme="dark"] .admin-login-form input {
     margin-left: 8px;
   }
 }
-@media (max-width: 480px) {
-  .gnb { padding-left: 18px; padding-right: 18px; }
-  .gnb nav { right: 63px; }
-}
+
