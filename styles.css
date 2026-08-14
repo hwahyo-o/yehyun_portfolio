@@ -204,16 +204,20 @@ button:focus-visible { outline: 2px solid var(--ink); outline-offset: 4px; }
 }
 .view-more {
   flex: 0 0 auto;
-  padding: 12px 18px;
-  border: 2px solid #c9ddff;
+  padding: 6px 8px;
   border-radius: 999px;
-  box-shadow: 0 3px 8px rgba(103,150,255,.2);
-  color: var(--blue);
-  font-size: .95rem;
-  font-weight: 800;
+  box-shadow: inset 1px 2px rgba(103,150,255,.2);
+  filter: drop-shadow(1px 3px 3px rgba(103, 105, 255, 0.2));
+  font-size: 14px;
+  font-weight: 500;
   background: #fff;
 }
-.view-more:hover, .view-more:focus-visible { transform: translateY(-2px); }
+.view-more:hover, .view-more:focus-visible { 
+  border: 1px solid #c9ddff;
+  background: #fff;
+  color: var(--blue);
+  font-weight: 600;
+}
 .work-rail { max-width: 1160px; margin: 0 auto; }
 .work-rail-featured {
   display: grid;
@@ -1369,7 +1373,7 @@ body[data-theme="dark"] .admin-login-form input {
 .ux-section-heading {
   max-width: 1200px;
   min-height: 20px;
-  margin: 0 auto 28px;
+  margin: 40px auto 28px;
   align-items: end;
 }
 .ux-heading-copy { display: grid; gap: 12px; }
@@ -1386,9 +1390,9 @@ body[data-theme="dark"] .admin-login-form input {
   line-height: 1;
 }
 .ux-section-heading h2 {
-  font-size: clamp(2.5rem, 3.34vw, 4rem);
+  font-size: clamp(32px, 3.34vw, 52px);
   font-style: italic;
-  letter-spacing: -.075em;
+  letter-spacing: -1px;
   line-height: 1;
 }
 .ux-section .view-more {
@@ -1451,15 +1455,15 @@ body[data-theme="dark"] .admin-login-form input {
 .ux-section .featured-copy strong {
   display: block;
   padding: 0;
-  font-size: clamp(1.6rem, 1.875vw, 2.25rem);
+  font-size: clamp(24px, 1.6vw, 36px);
   line-height: 1.2;
 }
 .ux-section .featured-copy p {
   display: -webkit-box;
   overflow: hidden;
   margin: 8px 0 0;
-  color: #333;
-  font-size: clamp(1.2rem, 1.46vw, 1.75rem);
+  color: #444;
+  font-size: clamp(16px, 0.95vw, 20px);
   line-height: 1.28;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
@@ -1484,14 +1488,15 @@ body[data-theme="dark"] .admin-login-form input {
 }
 .ux-section .project-card h3 {
   margin: 0;
-  font-size: 1.75rem;
+  font-size: 20px;
+  font-weight: 500;
 }
 @media (max-width: 1280px) {
   .ux-section { padding-left: var(--page-gutter); padding-right: var(--page-gutter); }
   .ux-section .work-rail-featured { grid-template-columns: minmax(0, 1.65fr) minmax(280px, .75fr); }
 }
 @media (max-width: 900px) {
-  .ux-section { padding-top: 96px; padding-bottom: 96px; background-size: min(70vw, 520px) auto; }
+  .ux-section { background-size: min(70vw, 520px) auto; }
   .ux-section .work-rail-featured { grid-template-columns: 1fr; }
   .ux-section .rail-side-slots { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); min-height: 260px; padding-top: 0; }
 }
