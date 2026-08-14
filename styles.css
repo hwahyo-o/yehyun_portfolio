@@ -698,8 +698,8 @@ button:focus-visible { outline: 2px solid var(--ink); outline-offset: 4px; }
 }
 .gallery-corner-tl { top: 0; left: calc(50% - 552px); filter: drop-shadow(-5px 5px 0 rgba(0, 0, 0, 1)); transform: scaleX(-1); }
 .gallery-corner-tr { top: 0; right: calc(50% - 552px); filter: drop-shadow(5px 5px 0 rgba(0, 0, 0, 1)); }
-.gallery-corner-bl { top: 580px; left: calc(50% - 552px); filter: drop-shadow(-5px -5px 0 rgba(0, 0, 0, 1)); transform: rotate(180deg); }
-.gallery-corner-br { top: 580px; right: calc(50% - 552px); filter: drop-shadow(5px -5px 0 rgba(0, 0, 0, 1)); transform: scaleY(-1); }
+.gallery-corner-bl { top: 430px; left: calc(50% - 552px); filter: drop-shadow(-5px -5px 0 rgba(0, 0, 0, 1)); transform: rotate(180deg); }
+.gallery-corner-br { top: 430px; right: calc(50% - 552px); filter: drop-shadow(5px -5px 0 rgba(0, 0, 0, 1)); transform: scaleY(-1); }
 .hero-frame .gallery-title-decoration {
   position: absolute;
   z-index: 5;
@@ -714,7 +714,7 @@ button:focus-visible { outline: 2px solid var(--ink); outline-offset: 4px; }
 .gallery-pagination {
   position: absolute;
   z-index: 6;
-  top: 526px;
+  top: 416px;
   left: 50%;
   display: flex;
   align-items: end;
