@@ -104,14 +104,13 @@ button:focus-visible { outline: 2px solid var(--ink); outline-offset: 4px; }
   display: flex;
   justify-content: space-between;
   align-items: center;
-  min-height: 62px;
   padding: 8px var(--page-gutter);
   background: var(--portfolio-bg, #fff);
   border-bottom: 1px solid var(--pink);
   box-shadow: 0 3px 3.5px rgba(0, 0, 0, .08);
 }
 .logo-button { display: inline-flex; align-items: center; padding: 0; }
-.logo-button img { display: block; width: 80px; height: 40px; object-fit: cover; }
+.logo-button img { display: block; width: 64px; object-fit: cover; }
 .gnb nav { display: flex; align-items: center; gap: clamp(18px, 3vw, 46px); }
 .gnb nav button {
   display: inline-flex;
@@ -119,9 +118,8 @@ button:focus-visible { outline: 2px solid var(--ink); outline-offset: 4px; }
   gap: 6px;
   padding: 4px 0;
   color: var(--portfolio-text, #333);
-  font-size: 18px;
+  font-size: 16px;
   font-weight: 700;
-  line-height: 22.8px;
   white-space: nowrap;
 }
 .gnb-nav-caret {
@@ -822,7 +820,7 @@ body {
   display: inline-grid;
   min-height: 34px;
   place-items: center;
-  padding: 7px 12px;
+  padding: 4px 14px;
   border: 1px solid var(--portfolio-border);
   border-radius: 999px;
   color: var(--portfolio-text, #333);
@@ -830,10 +828,10 @@ body {
   font-size: .74rem;
   font-weight: 800;
 }
-.gnb-theme-tool { min-width: 40px; padding: 10px 14px; }
-.gnb-theme-tool .bi { font-size: 12px; }
+.gnb-theme-tool { min-width: 40px; padding: 4px 14px; }
+.gnb-theme-tool .bi { font-size: 14px; }
 .gnb-admin-tool { min-width: 42px; }
-.gnb-admin-tool .bi { font-size: 18px; }
+.gnb-admin-tool .bi { font-size: 14px; }
 .gnb-tool:hover,
 .gnb-tool:focus-visible {
   border-color: var(--portfolio-primary);
