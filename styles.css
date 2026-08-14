@@ -1525,7 +1525,10 @@ body[data-theme="dark"] .admin-login-form input {
 @media (max-width: 835px) {
   .gnb {
     position: sticky;
+    flex-wrap: nowrap;
+    align-items: center;
     justify-content: flex-start;
+    gap: 0;
     min-height: 62px;
     padding: 8px 40px;
   }
