@@ -1381,7 +1381,7 @@ body[data-theme="dark"] .admin-login-form input {
   margin-bottom: 28px;
   align-items: end;
 }
-.ux-heading-copy { display: grid; gap: 18px; }
+.ux-heading-copy { display: grid; gap: 0; }
 .ux-section .section-label {
   width: max-content;
   margin: 0;
