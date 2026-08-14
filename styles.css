@@ -1363,16 +1363,16 @@ body[data-theme="dark"] .admin-login-form input {
 .ux-section {
   position: relative;
   overflow: hidden;
-  padding: 160px max(var(--page-gutter), calc((100vw - 1200px) / 2));
-  background: #fff url("./public/uxui-bridge.png") no-repeat left -16px top 37% / min(40.03vw, 769px) auto;
+  padding: 80px max(var(--page-gutter), calc((100vw - 1200px) / 2));
+  background: #fff url("./public/uxui-bridge.png") no-repeat left -16px bottom 0% / min(40.03vw, 769px) auto;
 }
 .ux-section-heading {
   max-width: 1200px;
-  min-height: 112px;
+  min-height: 20px;
   margin: 0 auto 28px;
   align-items: end;
 }
-.ux-heading-copy { display: grid; gap: 18px; }
+.ux-heading-copy { display: grid; gap: 12px; }
 .ux-section .section-label {
   width: max-content;
   margin: 0;
@@ -1412,7 +1412,7 @@ body[data-theme="dark"] .admin-login-form input {
   border-radius: 30px;
   background:
     linear-gradient(#fff, #fff) padding-box,
-    linear-gradient(180deg, #6796ff 0 72%, #f29aa8 100%) border-box;
+    linear-gradient(170deg, #6796ff 0 0%, #f29aa8 100%) border-box;
   box-shadow: 0 10px 10px rgba(89, 143, 255, .5);
 }
 .ux-section .project-slot-large {
@@ -1422,7 +1422,8 @@ body[data-theme="dark"] .admin-login-form input {
   border: 1px solid #fff;
   border-radius: 30px;
   background: #fff;
-  box-shadow: inset 2px 4px 7px rgba(0, 0, 0, .08);
+  box-shadow: inset 2px 4px 7px rgba(0, 0, 0, .05);
+  filter: drop-shadow(2px 3px 2px rgba(0,0,0,0.05));
 }
 .ux-section .project-slot-large span {
   color: #3f4248;
