@@ -42,3 +42,7 @@ No persistence, API, authentication, Worker, database, package, CDN, or startup 
 - Confirm the mobile GNB uses four columns with one flexible middle track and an 8px tools margin.
 - Confirm no `max-width` rule smaller than 835px targets `.gnb`, `.gnb-menu-toggle`, `.gnb-tools`, or `.gnb nav`.
 - Confirm static validation and deployed CSS availability; browser screenshots remain separate evidence.
+
+## Retry Record
+
+The first deployed CSS check found a legacy `@media (max-width: 620px)` GNB rule earlier in the stylesheet. Although the later 835px rule overrides its visible properties, the source does not satisfy the single-mobile-rule gate. Remove only those legacy GNB declarations, then repeat the sub-835px selector check before merge.

@@ -467,8 +467,6 @@ button:focus-visible { outline: 2px solid var(--ink); outline-offset: 4px; }
 
 @media (max-width: 620px) {
   :root { --page-gutter: 18px; }
-  .gnb { align-items: flex-start; gap: 14px; padding-top: 14px; padding-bottom: 14px; }
-  .gnb nav { flex-wrap: wrap; justify-content: flex-end; gap: 4px 14px; }
   .gallery-hero { grid-template-columns: 1fr; min-height: 440px; padding-top: 28px; }
   .hero-side { display: none; }
   .hero-media-slot { min-height: 230px; }
@@ -1070,10 +1068,6 @@ body[data-theme="dark"] .film-section {
   }
 }
 @media (max-width: 620px) {
-  .gnb-tools {
-    width: 100%;
-    justify-content: flex-end;
-  }
   .content-section {
     padding-top: 72px;
     padding-bottom: 72px;
