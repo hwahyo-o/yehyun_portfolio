@@ -679,8 +679,8 @@ button:focus-visible { outline: 2px solid var(--ink); outline-offset: 4px; }
 .gallery-swiper .swiper-slide.gallery-slide {
   flex: 0 0 1064px;
   width: 1064px;
-  min-height: 667px;
-  height: 667px;
+  min-height: 520px;
+  height: 520px;
   padding: 32px;
   border-radius: 90px;
   background: #c8bcff;
@@ -703,7 +703,7 @@ button:focus-visible { outline: 2px solid var(--ink); outline-offset: 4px; }
 .hero-frame .gallery-title-decoration {
   position: absolute;
   z-index: 5;
-  top: 650px;
+  top: 425px;
   left: 50%;
   width: 630px;
   height: 200px;
