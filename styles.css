@@ -1507,3 +1507,61 @@ body[data-theme="dark"] .admin-login-form input {
   .ux-section .rail-side-slots { grid-template-columns: 1fr; min-height: 0; gap: 26px; }
   .ux-section .project-slot-small { min-height: 180px; }
 }
+
+
+/* GNB mobile navigation */
+.gnb-menu-toggle {
+  display: none;
+  width: 44px;
+  height: 34px;
+  padding: 0;
+  place-items: center;
+  border: 2px solid #131313;
+  border-radius: 999px;
+  background: #fff;
+  color: #131313;
+}
+.gnb-menu-toggle .bi { font-size: 24px; line-height: 1; }
+@media (max-width: 835px) {
+  .gnb {
+    position: sticky;
+    justify-content: flex-start;
+    min-height: 62px;
+    padding: 8px 40px;
+  }
+  .gnb-menu-toggle {
+    display: inline-grid;
+    margin-left: auto;
+  }
+  .gnb nav {
+    position: absolute;
+    top: calc(100% - 4px);
+    right: 85px;
+    z-index: 1;
+    display: none;
+    width: 130px;
+    padding: 12px 0;
+    border: 1px solid #f29aa8;
+    border-radius: 12px;
+    background: #fff;
+    box-shadow: 0 3px 3.5px rgba(0, 0, 0, .08);
+  }
+  .gnb nav.is-open { display: grid; }
+  .gnb nav button {
+    justify-content: center;
+    min-height: 48px;
+    padding: 12px 32px;
+    color: #131313;
+    font-size: 18px;
+    font-weight: 600;
+  }
+  .gnb-nav-caret { display: none; }
+  .gnb-tools {
+    flex: 0 0 auto;
+    margin-left: 8px;
+  }
+}
+@media (max-width: 480px) {
+  .gnb { padding-left: 18px; padding-right: 18px; }
+  .gnb nav { right: 63px; }
+}
